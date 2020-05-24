@@ -1,0 +1,45 @@
+class OpticalMaterial:
+    """
+    A class for any material to be considered for its optical properties.
+    Per minimum it needs a name and a source file with (n,k) values for each wavelength.
+    Basic methods for this class are separation of refractive index, n or k components
+    and permittivity (both as a single pandas DataFrame or separately for Real,
+    or Imaginary parts).
+    
+    Method "form" describes the form or shape of the material and by default is "Infinite".
+    """
+    def __init__(self, name, source):
+        self.name = name
+        
+        p = pd.read_csv(source)
+        self.refractive_index = pd.read_csv(source)
+        self.form = "Infinite"
+        
+        self.n = p.drop(columns=['k'])
+        self.k = p.drop(columns=['n'])
+        
+        self.permittivity = pd.concat([p.iloc[:,0], p.iloc[:,1]**2 - p.iloc[:,2]**2, 2*p.iloc[:,1] * p.iloc[:,2]], axis=1, keys=[p.columns[0],
+                         "Real permittivity, a.u.", "Imaginary permittivity, a.u."])
+        self.real_permittivity = self.permittivity.drop(columns=["Imaginary permittivity, a.u."])
+        self.imaginary_permittivity = self.permittivity.drop(columns=["Real permittivity, a.u."])
+        
+    """
+    def regular_xspacing(self, dataset, spacing):
+        
+        # identify typical spacing
+        
+        # create a new x range
+        x_min = round(min(dataset[0]),)
+        x_new = np.arange()
+        # Preprocess the data
+    """    
+    def change_form(self, NewForm):
+        # Changes the form of the material.
+        # Available: Infinite, Plate, Nanoparticle
+        available_forms = ["Infinite", "Plate", "Nanoparticle"]
+        
+        if available_forms.count(NewForm) == 1:
+            self.form = NewForm
+        
+        else:
+            print("{} form cannot be called. Must be: Infinite, Plate or Nanoparticle.".format(NewForm))
