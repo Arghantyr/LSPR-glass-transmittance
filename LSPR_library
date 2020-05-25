@@ -8,31 +8,72 @@ class OpticalMaterial:
     
     Method "form" describes the form or shape of the material and by default is "Infinite".
     """
+    
     def __init__(self, name, source):
         self.name = name
         
-        p = pd.read_csv(source)
         self.refractive_index = pd.read_csv(source)
-        self.form = "Infinite"
-        
         self.n = p.drop(columns=['k'])
         self.k = p.drop(columns=['n'])
+        p = self.refractive_index
         
         self.permittivity = pd.concat([p.iloc[:,0], p.iloc[:,1]**2 - p.iloc[:,2]**2, 2*p.iloc[:,1] * p.iloc[:,2]], axis=1, keys=[p.columns[0],
                          "Real permittivity, a.u.", "Imaginary permittivity, a.u."])
         self.real_permittivity = self.permittivity.drop(columns=["Imaginary permittivity, a.u."])
         self.imaginary_permittivity = self.permittivity.drop(columns=["Real permittivity, a.u."])
         
-    """
-    def regular_xspacing(self, dataset, spacing):
+        self.form = "Infinite"
+
+    def regular_xspacing(self, optical_property, spacing):
         
-        # identify typical spacing
+        """
+        Takes optical_property, e.g. refractive_index and returns evenly spaced data with defined spacing.
+        Using spacing smaller than average spacing in the original data with throw a warning.
+        """
         
-        # create a new x range
-        x_min = round(min(dataset[0]),)
-        x_new = np.arange()
-        # Preprocess the data
-    """    
+        # identify a typical spectral spacing
+        p = optical_property
+        ds = p.iloc[:,0]
+        ds.name = p.columns[0]
+        minds = min(ds)
+        maxds = max(ds)
+        lds = len(ds)
+        spacings = [ds.iloc[k+1]-ds.iloc[k] for k in range(lds-1)]
+        avg_spacing = sum(spacings) / len(spacings)
+        
+        x_new = pd.Series(np.arange(minds, maxds, spacing), name="Wavelength, µm")
+        x_additional = pd.merge(ds, x_new, how="outer").sort_values(by="Wavelength, µm").reset_index(drop=True)
+
+        # Warn if new spacing is smaller than old spacing
+        len_spacing = len(str(spacing))
+        if spacing < avg_spacing:
+            print("Warning: the specified value of spacing {} is smaller than the average".format(spacing),
+                  " value of the spacing from the dataset {}. Interpolation may cause errors,".format(avg_spacing),
+                 " depending on the difference between the new spacing and the average old spacing")
+        
+        
+        # add values separated by new spacing, with NaN as missing values if the value is not there
+        new_x = pd.DataFrame(x_additional, columns=['Wavelength, µm'])
+        new_empty = pd.DataFrame(columns=list(p.columns[-2:])).fillna(np.nan)
+        reg_points = pd.concat([new_x, new_empty], axis=0, keys=list(p.columns))
+
+        # Dataset with additional data to be interpolated
+        extended = pd.concat([p, reg_points])
+        
+        extended = extended.drop_duplicates(subset='Wavelength, µm')
+        extended = extended.sort_values(by='Wavelength, µm')
+
+        extended = extended.reset_index(drop=True)
+
+        # interpolate the NaNs with dataframe.interpolate() - linear interpolation
+        extended = extended.interpolate()
+
+        regspace = extended[extended.iloc[:,0].isin(x_new)]
+        
+        regspace = regspace.reset_index(drop=True)
+
+        return regspace
+ 
     def change_form(self, NewForm):
         # Changes the form of the material.
         # Available: Infinite, Plate, Nanoparticle
