@@ -110,3 +110,29 @@ class Nanoparticle:
     def __repr__(self):
         return "{} nanoparticle with size {} nm and concentration {:.2e} cm^-3. Size distribution: {}.".format(
             self.material, self.size, self.concentration, self.distribution)
+
+
+class SpectralMeasurement:
+    """
+    Basic spectral measurements: absorbance, 
+    """
+    
+    def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
+                 thickness: float=1):
+        self.name = name
+        self.form = form
+        self.thickness = thickness
+        self.matrix = matrix
+        self.nanoparticle = nanoparticle
+           
+    def Abs(self):
+        # calculates the absorbance of the sample composite
+        return None
+        
+    def T(self, R_corr: bool=True):
+        # calculates the transmittance of the sample composite
+        return None
+        
+    def R(self, ):
+        # calculates the reflectance of the sample composite
+        return None
