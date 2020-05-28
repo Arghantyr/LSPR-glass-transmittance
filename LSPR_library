@@ -120,19 +120,89 @@ class SpectralMeasurement:
     def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
                  thickness: float=1):
         self.name = name
-        self.form = form
         self.thickness = thickness
         self.matrix = matrix
         self.nanoparticle = nanoparticle
-           
-    def Abs(self):
-        # calculates the absorbance of the sample composite
-        return None
+        
+        # Reflectance
+        L = 1 - self.matrix.refractive_index['n']
+        M = 1 + self.matrix.refractive_index['n']
+        reflectance = 100 * abs(L/M)**2
+        self.mreflectance = pd.concat([self.matrix.refractive_index.iloc[:,0], reflectance], axis=1,
+                                      keys=[self.matrix.refractive_index.columns[0], "Reflectance, %"])
+        
+        # Absorbance
+        # Define f_abs function
+        pi = np.pi
+        def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
+            c_abs = ((0.8686 * (pi ** 5)) * 1e-30) / 3
+            L_abs = c_abs * C_tot * t * (((eps_m ** 2) / (l_0 ** 4)) * (((e_1 - eps_m) ** 2) + (e_2 ** 2)))
+            M_abs = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
+            f_abs = L_abs / M_abs
+            return f_abs
+        
+        # Define f_sca function
+        def f_sca(eps_m, e_1, e_2, l_0, C_tot, t):
+            c_sca = 1.3029 * (pi ** 2) * 1e-21
+            L_sca = c_sca * C_tot * t * (((eps_m ** 1.5) / l_0) * e_2)
+            M_sca = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
+            f_sca = L_sca / M_sca
+            return f_sca
+        
+        # Define integrals 1 and 2 - I_1
+        def I_1(d, n, mean, sd):
+            def integrand(d,n,mean,sd):
+                return (d**n)*stats.norm.pdf(d, loc=mean, scale=sd)
+            return integrate.simps(integrand(d,n,mean,sd))
+        
+        n_glass = self.matrix.refractive_index.iloc[1]
+        k_glass = self.matrix.refractive_index.iloc[2]
+        eps_m = self.matrix.permittivity.iloc[:,1]
+        l_0 = self.matrix.refractive_index.iloc[0]
+        e_1 = self.nanoparticle.material.permittivity.iloc[:,1]
+        e_2 = self.nanoparticle.material.permittivity.iloc[:,2]
+        d = np.linspace(0,100,100)
+        C_tot = self.nanoparticle.concentration
+        mean = self.nanoparticle.size
+        #------------------
+        sd = 1   # For now only 1 is allowed.
+        #------------------
+        t = self.thickness
+
+        # Reflection losses - approximation using matrix only
+        mrefl_correction = 1 - 0.01 * self.mreflectance.iloc[:,1]
+    
+        # Define A_glass function
+        L1 = k_glass * t
+        A_matrix = 5.4576 * (L1 / l_0)
+
+        # A_nano - inner function
+        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) 
+        + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd)
+
+        A_comp = A_matrix + A_nano
+
+        self.Abs = pd.concat([l_0, A_comp], axis=1,
+                             keys=[self.matrix.refractive_index.columns[0], "Absorbance, %"])
+        
+        #------------------------------
+        # WARNING!!!
+        # Matrix and nanoparticle datasets must be regularized to the same min, max and spacing.
+        #------------------------------
         
     def T(self, R_corr: bool=True):
         # calculates the transmittance of the sample composite
-        return None
+        transmittance = None
         
-    def R(self, ):
-        # calculates the reflectance of the sample composite
-        return None
+        if R_corr == True:
+            # evaluate corrected transmittance
+            transmittance = (1 - self.mreflectance) * np.exp(-(A_glass_matrix + A_nano_Ag))
+        else:
+            # evaluate without correction
+            transmittance = np.exp(-(A_glass_matrix + A_nano_Ag))
+            
+        transmittance = 100*transmittance
+        transmittance = pd.concat([self.matrix.iloc[:,0], transmittance],
+                                  keys=[self.matrix.columns[0], "Transmittance, %"])
+        
+        return transmittance
