@@ -117,19 +117,31 @@ class SpectralMeasurement:
     Basic spectral measurements: absorbance, 
     """
     
+    matrix_refractive_index = None
+    matrix_real_permittivity = None
+    nanoparticle_permittivity = None
+    nanoparticle_concentration = None
+    nanoparticle_size = None
+    
+    
     def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
                  thickness: float=1):
         self.name = name
         self.thickness = thickness
         self.matrix = matrix
         self.nanoparticle = nanoparticle
+        self.matrix_refractive_index = matrix.refractive_index
+        self.matrix_real_permittivity = matrix.permittivity.iloc[:,1]
+        self.nanoparticle_permittivity = nanoparticle.material.permittivity
+        self.nanoparticle_concentration = nanoparticle.concentration
+        self.nanoparticle_size = nanoparticle.size
         
         # Reflectance
-        L = 1 - self.matrix.refractive_index['n']
-        M = 1 + self.matrix.refractive_index['n']
+        L = 1 - self.matrix_refractive_index['n']
+        M = 1 + self.matrix_refractive_index['n']
         reflectance = 100 * abs(L/M)**2
-        self.mreflectance = pd.concat([self.matrix.refractive_index.iloc[:,0], reflectance], axis=1,
-                                      keys=[self.matrix.refractive_index.columns[0], "Reflectance, %"])
+        self.mreflectance = pd.concat([self.matrix_refractive_index.iloc[:,0], reflectance], axis=1,
+                                      keys=[self.matrix_refractive_index.columns[0], "Reflectance, %"])
         
         # Absorbance
         # Define f_abs function
@@ -155,15 +167,15 @@ class SpectralMeasurement:
                 return (d**n)*stats.norm.pdf(d, loc=mean, scale=sd)
             return integrate.simps(integrand(d,n,mean,sd))
         
-        n_glass = self.matrix.refractive_index.iloc[1]
-        k_glass = self.matrix.refractive_index.iloc[2]
-        eps_m = self.matrix.permittivity.iloc[:,1]
-        l_0 = self.matrix.refractive_index.iloc[0]
-        e_1 = self.nanoparticle.material.permittivity.iloc[:,1]
-        e_2 = self.nanoparticle.material.permittivity.iloc[:,2]
+        n_glass = self.matrix_refractive_index['n']
+        k_glass = self.matrix_refractive_index['k']
+        eps_m = self.matrix_real_permittivity
+        l_0 = self.matrix_refractive_index.iloc[:,0]
+        e_1 = self.nanoparticle_permittivity.iloc[:,1]
+        e_2 = self.nanoparticle_permittivity.iloc[:,2]
         d = np.linspace(0,100,100)
-        C_tot = self.nanoparticle.concentration
-        mean = self.nanoparticle.size
+        C_tot = self.nanoparticle_concentration
+        mean = self.nanoparticle_size
         #------------------
         sd = 1   # For now only 1 is allowed.
         #------------------
@@ -177,13 +189,12 @@ class SpectralMeasurement:
         A_matrix = 5.4576 * (L1 / l_0)
 
         # A_nano - inner function
-        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) 
-        + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd)
+        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd)
 
         A_comp = A_matrix + A_nano
 
         self.Abs = pd.concat([l_0, A_comp], axis=1,
-                             keys=[self.matrix.refractive_index.columns[0], "Absorbance, %"])
+                             keys=[self.matrix_refractive_index.columns[0], "Absorbance, a.u."])
         
         #------------------------------
         # WARNING!!!
@@ -191,18 +202,46 @@ class SpectralMeasurement:
         #------------------------------
         
     def T(self, R_corr: bool=True):
+        
+        Abs = self.Abs.iloc[:,1]
         # calculates the transmittance of the sample composite
         transmittance = None
         
         if R_corr == True:
             # evaluate corrected transmittance
-            transmittance = (1 - self.mreflectance) * np.exp(-(A_glass_matrix + A_nano_Ag))
+            transmittance = (1 - 0.01*self.mreflectance.iloc[:,1]) * np.exp(-(Abs))
         else:
             # evaluate without correction
-            transmittance = np.exp(-(A_glass_matrix + A_nano_Ag))
+            transmittance = np.exp(-(Abs))
             
         transmittance = 100*transmittance
-        transmittance = pd.concat([self.matrix.iloc[:,0], transmittance],
-                                  keys=[self.matrix.columns[0], "Transmittance, %"])
+        transmittance = pd.concat([self.matrix_refractive_index.iloc[:,0], transmittance], axis=1,
+                                  keys=[self.matrix_refractive_index.columns[0], "Transmittance, %"])
         
         return transmittance
+    
+    def align_datasets(self):
+        # add x subsets of matrix and nanoparticle
+        mat_per = self.matrix.permittivity.iloc[:,0]
+        nano_per = self.nanoparticle.material.permittivity.iloc[:,0]
+        aligned_x_subset = pd.concat([mat_per, nano_per]).sort_values().reset_index(drop=True)
+
+        # interpolate data based on new x subset
+        interpolated_matrix_RI = pd.merge(aligned_x_subset, self.matrix.refractive_index,
+                                          how="outer").interpolate()
+        interpolated_matrix_real_permittivity = pd.merge(aligned_x_subset, self.matrix.permittivity,
+                                                         how="outer").interpolate().iloc[:,1]
+        interpolated_nanoparticle_permittivity = pd.merge(aligned_x_subset,
+                                                          self.nanoparticle.material.permittivity,
+                                                          how="outer").interpolate()
+        
+        # initialize a copy SpectralMeasurement
+        aligned_measurement = SpectralMeasurement("Aligned data measurement", matrix=self.matrix,
+                                                  nanoparticle=self.nanoparticle)
+        
+        # insert the interpolated input
+        aligned_measurement.matrix_refractive_index = interpolated_matrix_RI
+        aligned_measurement.matrix_real_permittivity = interpolated_matrix_real_permittivity
+        aligned_measurement.nanoparticle_permittivity = interpolated_nanoparticle_permittivity
+        
+        return aligned_measurement
