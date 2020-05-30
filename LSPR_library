@@ -245,3 +245,93 @@ class SpectralMeasurement:
         aligned_measurement.nanoparticle_permittivity = interpolated_nanoparticle_permittivity
         
         return aligned_measurement
+
+
+# Sellmeier fitting
+
+class Sellmeier:
+
+    """
+    Takes the data and fits the n-th order Sellmeier equation.
+    
+    data:
+        A dataframe of shape (a,b), where b>=2;
+        1st column - wavelength, 2nd column - real refractive index.
+    
+    n:
+        Order of the equation, i.e. the number of summation terms
+    """
+    
+    constants = None
+    
+    def __init__(self, data: pd.DataFrame = None, n: int = 3):
+        self.data = data
+        self.n = n
+        # Initiate an empty table of constants
+        
+        terms = []
+        for j in range(1,n+1):
+            symb = ("B", "C")
+            for k in symb:
+                terms.append(k+str(j))
+    
+        self.constants = pd.concat([pd.Series(terms), pd.Series([0 for _ in range(2*n)])],
+                                   axis=1, keys=["Constant", "Value"])
+    
+
+    def fit_data(self):
+        def Sellmeier(x, constants):
+    
+            Sellm = []
+    
+            for j in x:
+                # get the numerators
+                Num = (constants.iloc[:,1][::2] * (j**2)).reset_index(drop=True)
+    
+                # get the denominators
+                Den = (((j**2) - constants.iloc[:,1][1::2])).reset_index(drop=True)
+            
+                Sellm.append( 1 + (Num / Den).sum() )
+    
+            Sellm = pd.concat([x, pd.Series(Sellm)], axis=1, keys=[x.name, "n_squared"])
+    
+        
+            return Sellm
+        
+        n = self.n
+        data = self.data
+    
+        # Preprocess the data
+        Sellm_fit = pd.concat([data.iloc[:,0], data.iloc[:,1] ** 2], axis = 1,
+                              keys = [data.columns[0], 'n squared'])
+
+        # Run optimization on the glass data
+        """
+        The optimizing parameters are based on Sellmeier constants for existing glasses.
+        p0 initializing values are set on the order of the constants for fused silica.
+        """
+        
+        # Initialize upper bounds and starting values
+        up_bounds = [10]*2*n
+        p_start = [1]*2*n
+        
+        up_bounds_3 = [2., 1., 10., 0.01, 0.1, 200.]
+        p_start_3 = [0.5, 0.5, 0.7, 0.005, 0.01, 100]
+        
+        if n<=3:
+            up_bounds[:(2*n)] = up_bounds_3[:(2*n)]
+            p_start[:(2*n)] = p_start_3[:(2*n)]
+        else:
+            up_bounds[:6] = up_bounds_3[:6]
+            p_start[:6] = p_start[:6]
+        
+        xdata = Sellm_fit.iloc[:,0]
+        ydata = Sellm_fit['n squared']
+        popt, pcov = optimize.curve_fit(Sellmeier, xdata, ydata,
+                                        bounds = (0, up_bounds),
+                                        p0 = p_start)
+
+        # fill the fitted constants (popt) to the table of constants
+        self.constants["Value"] = popt
+    
+        return self.constants
