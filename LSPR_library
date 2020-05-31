@@ -78,10 +78,6 @@ class OpticalMaterial:
         return "{} material".format(self.name)
         
         
-"""
-Rather than adding a form to the OpticalMaterial, which does nothing, it could be better to create another class,
-e.g. Nanoparticle, Matrix, Environment. There each can have its own properties, like form, distribution, etc.
-"""
 
 class Nanoparticle:
     
@@ -90,11 +86,28 @@ class Nanoparticle:
     size, concentration, size distribution, absorption cross section, scattering cross section
     """
     
-    def __init__(self, material: OpticalMaterial=None, size: float=10, concentration: float=1e18, distribution: str=None):
+    def __init__(self, name: str=None, material: OpticalMaterial=None, size: float=10,
+                 concentration: float=1e18):
+        
+        """
+        Initializes the Nanoparticle object.
+        
+        Parameters:
+            name: str
+                The name of the Nanoparticle object.
+            material: OpticalMaterial
+                The material the nanoparticles will be made of.
+            size:
+                Mean size of the nanoparticle population. [nm]
+            concentration:
+                Total concentration of nanoparticles. [1/cm3]
+            
+        """
+        
+        self.name = name
         self.material = material
         self.size = size
         self.concentration = concentration
-        self.distribution = distribution
         
     def modify(self, feature, new):
         try:
@@ -104,12 +117,10 @@ class Nanoparticle:
                 self.size = new
             elif feature == self.concentration:
                 self.concentration = new
-            elif feature == self.distribution:
-                self.distribution = new
         
     def __repr__(self):
-        return "{} nanoparticle with size {} nm and concentration {:.2e} cm^-3. Size distribution: {}.".format(
-            self.material, self.size, self.concentration, self.distribution)
+        return "{} nanoparticle with size {} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
+            self.material, self.size, self.concentration)
 
 
 class SpectralMeasurement:
@@ -126,6 +137,11 @@ class SpectralMeasurement:
     
     def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
                  thickness: float=1):
+        
+        """
+        Presets the simulation of a spectral measurement of the matrix-nanoparticle composite of known thickness.
+        """
+        
         self.name = name
         self.thickness = thickness
         self.matrix = matrix
@@ -147,6 +163,26 @@ class SpectralMeasurement:
         # Define f_abs function
         pi = np.pi
         def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
+            
+            """
+            A function determining the position and shape of the absorption cross section.
+            
+            Parameters:
+                eps_m:
+                    Real permittivity of the matrix. [a.u]
+                e_1:
+                    Real permittivity of the material of the nanoparticles. [a.u.]
+                e_2:
+                    Imaginary permittivity of the material of the nanoparticles. [a.u.]
+                l_0:
+                    Wavelength. [µm]
+                C_tot:
+                    Total concentration of nanoparticles. [1/cm3]
+                t:
+                    Sample thickness. [µm]
+                
+            """
+            
             c_abs = ((0.8686 * (pi ** 5)) * 1e-30) / 3
             L_abs = c_abs * C_tot * t * (((eps_m ** 2) / (l_0 ** 4)) * (((e_1 - eps_m) ** 2) + (e_2 ** 2)))
             M_abs = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
@@ -155,6 +191,25 @@ class SpectralMeasurement:
         
         # Define f_sca function
         def f_sca(eps_m, e_1, e_2, l_0, C_tot, t):
+            
+            """
+            A function determining the position and shape of the scattering cross section.
+            
+            Parameters:
+                eps_m:
+                    Real permittivity of the matrix. [a.u]
+                e_1:
+                    Real permittivity of the material of the nanoparticles. [a.u.]
+                e_2:
+                    Imaginary permittivity of the material of the nanoparticles. [a.u.]
+                l_0:
+                    Wavelength. [µm]
+                C_tot:
+                    Total concentration of nanoparticles. [1/cm3]
+                t:
+                    Sample thickness. [µm]
+            """
+            
             c_sca = 1.3029 * (pi ** 2) * 1e-21
             L_sca = c_sca * C_tot * t * (((eps_m ** 1.5) / l_0) * e_2)
             M_sca = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
@@ -163,6 +218,26 @@ class SpectralMeasurement:
         
         # Define integrals 1 and 2 - I_1
         def I_1(d, n, mean, sd):
+            
+            """
+            Integrated n-th order power of the normally distributed diameter as part
+            of the absorption and scattering cross sections of the Mie dipol approximation.
+            
+            Parameters:
+                d:
+                    diameter of the nanoparticles
+                n:
+                    order of the exponentiation
+                mean:
+                    mean size of the nanoparticle size distribution in [nm]
+                sd:
+                    standard deviation of the nanoparticle distribution in [nm]
+                    
+            Returns:
+                Integral of product:
+                    normal distribution N(mean, sd)   X   d**n
+            """
+            
             def integrand(d,n,mean,sd):
                 return (d**n)*stats.norm.pdf(d, loc=mean, scale=sd)
             return integrate.simps(integrand(d,n,mean,sd))
@@ -196,12 +271,21 @@ class SpectralMeasurement:
         self.Abs = pd.concat([l_0, A_comp], axis=1,
                              keys=[self.matrix_refractive_index.columns[0], "Absorbance, a.u."])
         
-        #------------------------------
-        # WARNING!!!
-        # Matrix and nanoparticle datasets must be regularized to the same min, max and spacing.
-        #------------------------------
         
     def T(self, R_corr: bool=True):
+        
+        """
+        Calculates the transmittance of the Matrix-Nanoparticle composite with the preset thickness.
+        
+        Parameters:
+            R_corr:
+                Reflectance correction. When True takes reflection losses into account. Uses Fresnel equation
+                approximation for 90 deg incidence and transition between composite and air.
+                
+        Returns:
+            T:
+                Transmittance of the composite. pd.DataFrame format.
+        """
         
         Abs = self.Abs.iloc[:,1]
         # calculates the transmittance of the sample composite
@@ -221,6 +305,15 @@ class SpectralMeasurement:
         return transmittance
     
     def align_datasets(self):
+        
+        """
+        Takes the combined Wavelength sets of Matrix and Nanoparticle (outer join)
+        and interpolates the missing data using linear approximation of neighbouring points.
+        
+        WARNING!
+        Can produce errors when large difference in datasets is present.
+        """
+        
         # add x subsets of matrix and nanoparticle
         mat_per = self.matrix.permittivity.iloc[:,0]
         nano_per = self.nanoparticle.material.permittivity.iloc[:,0]
