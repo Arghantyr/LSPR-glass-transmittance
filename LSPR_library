@@ -249,6 +249,8 @@ class SpectralMeasurement:
 
 # Sellmeier fitting
 
+# Sellmeier fitting
+
 class Sellmeier:
 
     """
@@ -264,41 +266,64 @@ class Sellmeier:
     
     constants = None
     
-    def __init__(self, data: pd.DataFrame = None, n: int = 3):
+    def __init__(self, data: pd.DataFrame = None):
         self.data = data
-        self.n = n
         # Initiate an empty table of constants
         
         terms = []
-        for j in range(1,n+1):
+        for j in range(1,4):
             symb = ("B", "C")
             for k in symb:
                 terms.append(k+str(j))
     
-        self.constants = pd.concat([pd.Series(terms), pd.Series([0 for _ in range(2*n)])],
-                                   axis=1, keys=["Constant", "Value"])
+        self.constants = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
     
 
-    def fit_data(self):
-        def Sellmeier(x, constants):
-    
-            Sellm = []
-    
-            for j in x:
-                # get the numerators
-                Num = (constants.iloc[:,1][::2] * (j**2)).reset_index(drop=True)
-    
-                # get the denominators
-                Den = (((j**2) - constants.iloc[:,1][1::2])).reset_index(drop=True)
+    def model(self, x):
+        """
+        A 3rd order Sellmeier function.
             
-                Sellm.append( 1 + (Num / Den).sum() )
-    
-            Sellm = pd.concat([x, pd.Series(Sellm)], axis=1, keys=[x.name, "n_squared"])
-    
+        Parameters:
+            x: int, float, np.array, pd.Series
+            
+        Returns:
+            The output of the 3rd order Sellmeier function:
+            - a single number: int, float
+            - a np.array, pd.Series: np.array, pd.Series, respectively
+                
+        """
+        B1 = self.constants["B1"]
+        C1 = self.constants["C1"]
+        B2 = self.constants["B2"]
+        C2 = self.constants["C2"]
+        B3 = self.constants["B3"]
+        C3 = self.constants["C3"]
         
+        
+        Sellm = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+            
+        return Sellm
+    
+    def fit_data(self):
+        def Sellmeier(x, B1, C1, B2, C2, B3, C3):
+            """
+            A 3rd order Sellmeier function.
+            
+            Parameters:
+                x: int, float, np.array, pd.Series
+                B,C = constants of the Sellmeier equation
+            
+            Returns:
+            The output of the 3rd order Sellmeier function:
+                - a single number: int, float
+                - a np.array, pd.Series: np.array, pd.Series, respectively
+                
+            """
+            
+            Sellm = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+            
             return Sellm
         
-        n = self.n
         data = self.data
     
         # Preprocess the data
@@ -311,27 +336,14 @@ class Sellmeier:
         p0 initializing values are set on the order of the constants for fused silica.
         """
         
-        # Initialize upper bounds and starting values
-        up_bounds = [10]*2*n
-        p_start = [1]*2*n
-        
-        up_bounds_3 = [2., 1., 10., 0.01, 0.1, 200.]
-        p_start_3 = [0.5, 0.5, 0.7, 0.005, 0.01, 100]
-        
-        if n<=3:
-            up_bounds[:(2*n)] = up_bounds_3[:(2*n)]
-            p_start[:(2*n)] = p_start_3[:(2*n)]
-        else:
-            up_bounds[:6] = up_bounds_3[:6]
-            p_start[:6] = p_start[:6]
-        
         xdata = Sellm_fit.iloc[:,0]
         ydata = Sellm_fit['n squared']
         popt, pcov = optimize.curve_fit(Sellmeier, xdata, ydata,
-                                        bounds = (0, up_bounds),
-                                        p0 = p_start)
+                                        bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
+                                        p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
 
         # fill the fitted constants (popt) to the table of constants
-        self.constants["Value"] = popt
+        for j in range(6):
+            self.constants.loc[self.constants.index[j]] = popt[j]
     
         return self.constants
