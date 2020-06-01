@@ -1,16 +1,76 @@
 class OpticalMaterial:
     """
     A class for any material to be considered for its optical properties.
-    Per minimum it needs a name and a source file with (n,k) values for each wavelength.
-    Basic methods for this class are separation of refractive index, n or k components
-    and permittivity (both as a single pandas DataFrame or separately for Real,
-    or Imaginary parts).
+    Takes a tabular source file (.csv or pd.DataFrame) of form: Wavelength, n, k.
+    Stores the refractive index and electric permittivity.
+    
+    Available methods:
+    -------------------
+    
+        regular_xspacing(low_bound, up_bound, spacing):
+        
+            Transforms the data to regularly spaced dataset with lower bound = low_bound,
+            upper bound = up_bound and a given spacing
+            
+            Example:
+            --------
+            
+            material = OpticalMaterial("Material_X", old_dataset)
+            RI = material.refractive_index
+            RI
+            
+            Wavelength |    n     |    k     |
+            -----------|----------|----------|
+            0.280      |  2.4440  |  0.0030  |
+            0.403      |  2.3410  |  0.0030  |
+            0.427      |  2.3320  |  0.0020  |
+            0.675      |  2.2830  |  0.0010  |
+            0.816      |  2.2720  |  0.0010  |
+            
+            
+            material.regular_xspacing(RI, 0.280, 0.821, 0.135)
+
+            Wavelength |    n     |    k     |
+            -----------|----------|----------|
+            0.280      |  2.4440  |  0.0030  |
+            0.415      |  2.3365  |  0.0025  |
+            0.550      |  2.3075  |  0.0015  |
+            0.685      |  2.2775  |  0.0010  |
+            0.820      |  2.2720  |  0.0010  |
+            
     """
     
     def __init__(self, name, source):
-        self.name = name
         
-        self.refractive_index = pd.read_csv(source)
+        """
+        Initialize basic properties of the optical material based on the source.
+        
+        Parameters:
+            name: str
+                Name given to the optical material, e.g. "Silver_99" for optical data on 99% purity silver.
+            source: .csv file, pd.DataFrame
+                Source of the refractive index data. Expected a 3 column table: Wavelength, n, k.
+                
+        """
+        # Handle the name
+        if type(name) == str:
+            self.name = name
+        else:
+            raise Exception("Invalid type for the 'name'. Must be 'str'.")
+        
+        
+        # Handle the source
+        if type(source) == str:
+            if str[-4:] == '.csv':
+                self.refractive_index = pd.read_csv(source)
+            else:
+                raise Exception("Invalid sourcefile. Only '.csv' or 'pd.DataFrame' type accepted.")
+        elif type(source) == pd.DataFrame:
+            self.refractive_index = source
+            self.refractive_index.columns = ["Wavelength", "n", "k"]
+        else:
+            raise Exception("Invalid sourcefile. Only '.csv' or 'pd.DataFrame' type accepted.")
+        
         p = self.refractive_index
         self.n = p.drop(columns=['k'])
         self.k = p.drop(columns=['n'])
@@ -20,7 +80,8 @@ class OpticalMaterial:
         self.real_permittivity = self.permittivity.drop(columns=["Imaginary permittivity, a.u."])
         self.imaginary_permittivity = self.permittivity.drop(columns=["Real permittivity, a.u."])
 
-    def regular_xspacing(self, optical_property, spacing):
+    def regular_xspacing(self, optical_property: str = "refractive_index", left_bound: float = None,
+                         right_bound: float = None, spacing: float = None):
         
         """
         Takes optical_property, e.g. refractive_index and returns evenly spaced data with defined spacing.
@@ -31,13 +92,24 @@ class OpticalMaterial:
         p = optical_property
         ds = p.iloc[:,0]
         ds.name = p.columns[0]
-        minds = min(ds)
-        maxds = max(ds)
+        
+        
+        # Modify the bounds
+        
+        if left_bound == None:
+            minds = min(ds)
+        else:
+            minds = left_bound
+            
+        if right_bound == None:
+            maxds = max(ds)
+        else:
+            maxds = right_bound
         lds = len(ds)
         spacings = [ds.iloc[k+1]-ds.iloc[k] for k in range(lds-1)]
         avg_spacing = sum(spacings) / len(spacings)
-        x_new = pd.Series(np.arange(minds, maxds, spacing), name="Wavelength, µm")
-        x_additional = pd.merge(ds, x_new, how="outer").sort_values(by="Wavelength, µm").reset_index(drop=True)
+        x_new = pd.Series(np.arange(minds, maxds, spacing), name="Wavelength")
+        x_additional = pd.merge(ds, x_new, how="outer").sort_values(by="Wavelength").reset_index(drop=True)
 
         # Warn if new spacing is smaller than old spacing
         len_spacing = len(str(spacing))
@@ -49,7 +121,7 @@ class OpticalMaterial:
         
         # Preprocess the data
         # add values separated by new spacing, with NaN as missing values if the value is not there
-        new_x = pd.DataFrame(x_additional, columns=['Wavelength, µm'])
+        new_x = pd.DataFrame(x_additional, columns=['Wavelength'])
         new_empty = pd.DataFrame(columns=list(p.columns[-2:])).fillna(np.nan)
         reg_points = pd.concat([new_x, new_empty], axis=0, keys=list(p.columns))
 
@@ -57,8 +129,8 @@ class OpticalMaterial:
         extended = pd.concat([p, reg_points])
         
         # sort the new dataframe and drop duplicates
-        extended = extended.drop_duplicates(subset='Wavelength, µm')
-        extended = extended.sort_values(by='Wavelength, µm')
+        extended = extended.drop_duplicates(subset='Wavelength')
+        extended = extended.sort_values(by='Wavelength')
 
         # reset the index and drop the old one
         extended = extended.reset_index(drop=True)
