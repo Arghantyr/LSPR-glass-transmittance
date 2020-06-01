@@ -231,9 +231,16 @@ class SpectralMeasurement:
         self.mreflectance = pd.concat([self.matrix_refractive_index.iloc[:,0], reflectance], axis=1,
                                       keys=[self.matrix_refractive_index.columns[0], "Reflectance, %"])
         
+        # Raise exception if datasets are not aligned, i.e.: wavelength subsets are not identical.
+        
+        if matrix.permittivity.iloc[:,0] != nanoparticle.material.permittivity.iloc[:,0]:
+            raise Exception("The Matrix and Nanoparticle wavelengths are different. Align the data with 'align_datasets', 'regular_xspacing' or other tool to avoid incorrect results.")
+        
         # Absorbance
+        
         # Define f_abs function
-        pi = np.pi
+        pi = np.pi       
+        
         def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
             
             """
