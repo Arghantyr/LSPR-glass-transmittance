@@ -7,9 +7,6 @@ from scipy import optimize
 from scipy import integrate
 from scipy import stats
 
-
-# Build classes
-
 class OpticalMaterial:
     """
     A class for any material to be considered for its optical properties.
@@ -171,7 +168,7 @@ class Nanoparticle:
     """
     
     def __init__(self, name: str=None, material: OpticalMaterial=None, size: float=10,
-                 concentration: float=1e18):
+                 stdev: float=1, concentration: float=1e18):
         
         """
         Initializes the Nanoparticle object.
@@ -183,6 +180,8 @@ class Nanoparticle:
                 The material the nanoparticles will be made of.
             size:
                 Mean size of the nanoparticle population. [nm]
+            stdev:
+                Standard deviation of the nanoparticle size distribution. [nm]
             concentration:
                 Total concentration of nanoparticles. [1/cm3]
             
@@ -191,6 +190,7 @@ class Nanoparticle:
         self.name = name
         self.material = material
         self.size = size
+        self.stdev = stdev
         self.concentration = concentration
         
     def modify(self, feature, new):
@@ -201,10 +201,12 @@ class Nanoparticle:
             self.size = new
         elif feature == self.concentration:
             self.concentration = new
+        elif feature == self.stdev:
+            self.stdev = new
         
     def __repr__(self):
-        return "{} nanoparticle with size {} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
-            self.material, self.size, self.concentration)
+        return "{} nanoparticle with size {}±{} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
+            self.material, self.size, self.stdev, self.concentration)
 
 
 class SpectralMeasurement:
@@ -217,6 +219,7 @@ class SpectralMeasurement:
     nanoparticle_permittivity = None
     nanoparticle_concentration = None
     nanoparticle_size = None
+    nanoparticle_stdev = None
     
     
     def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
@@ -235,6 +238,7 @@ class SpectralMeasurement:
         self.nanoparticle_permittivity = nanoparticle.material.permittivity
         self.nanoparticle_concentration = nanoparticle.concentration
         self.nanoparticle_size = nanoparticle.size
+        self.nanoparticle_stdev = nanoparticle.stdev
         
         # Reflectance
         L = 1 - self.matrix_refractive_index['n']
@@ -342,9 +346,7 @@ class SpectralMeasurement:
         d = np.linspace(0,100,100)
         C_tot = self.nanoparticle_concentration
         mean = self.nanoparticle_size
-        #------------------
-        sd = 1   # For now only 1 is allowed.
-        #------------------
+        sd = self.nanoparticle_stdev
         t = self.thickness
 
         # Reflection losses - approximation using matrix only
