@@ -182,13 +182,13 @@ class Nanoparticle:
         self.concentration = concentration
         
     def modify(self, feature, new):
-        try:
-            if feature == self.material:
-                self.material = new
-            elif feature == self.size:
-                self.size = new
-            elif feature == self.concentration:
-                self.concentration = new
+
+        if feature == self.material:
+            self.material = new
+        elif feature == self.size:
+            self.size = new
+        elif feature == self.concentration:
+            self.concentration = new
         
     def __repr__(self):
         return "{} nanoparticle with size {} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
@@ -444,12 +444,12 @@ class Sellmeier:
     constants = None
     
     def __init__(self, data):
-    """
-    data:
-        A table of shape (a,b), where b>=2;
-        1st column - wavelength, 2nd column - real refractive index.
-        Available formats: pd.DataFrame, np.array, .csv sourcefile
-    """
+        """
+        data:
+            A table of shape (a,b), where b>=2;
+            1st column - wavelength, 2nd column - real refractive index.
+            Available formats: pd.DataFrame, np.array, .csv sourcefile
+        """
         # READ the input data
         typ = type(data)
         
