@@ -401,6 +401,17 @@ class SpectralMeasurement:
         
         return transmittance
     
+    def plot(feature: str = "T", low: float = None, high: float = None):
+        """
+        Plots the specified feature with respect to the wavelength.
+        """
+        
+        # Transmittance
+        if feature == "T":
+            data = self.T
+            plot = plt.plot(data)
+        
+    
     def align_datasets(self):
         
         """
@@ -455,7 +466,7 @@ class Sellmeier:
     fit_data:
         input: real refractive index data, Refractive Index vs. Wavelength
             
-        output: Sellmeier constants B_i, C_i (i=1...3)
+        output: Sellmeier constants for n: B_i, C_i (i=1...3) and for k: b_i (i=1...3)
     """
     
 
@@ -486,7 +497,7 @@ class Sellmeier:
         
         terms = []
         for j in range(1,4):
-            symb = ("B", "C")
+            symb = ("B", "C", "b")
             for k in symb:
                 terms.append(k+str(j))
     
@@ -512,6 +523,9 @@ class Sellmeier:
         C2 = self.constants["C2"]
         B3 = self.constants["B3"]
         C3 = self.constants["C3"]
+        b1 = self.constants["b1"]
+        b2 = self.constants["b2"]
+        b3 = self.constants["b3"]
         
         # READ the input data
         typ = type(x)
@@ -525,51 +539,103 @@ class Sellmeier:
         elif ((typ == int)|(typ == float)):
             x = pd.DataFrame(x, columns="Wavelength")
         
-        Sellm = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+        Sellm_n = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+        Sellm_k = (Sellm_n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
             
-        return pd.concat([x, Sellm**0.5], axis=1, keys=["Wavelength", "n"])
+        return pd.concat([x, Sellm_n**0.5, Sellm_k], axis=1, keys=["Wavelength", "n", "k"])
     
-    def fit_data(self):
-        def Sellmeier(x, B1, C1, B2, C2, B3, C3):
+    def fit_data(self):        
+        def Sellmeier(self):
             """
             A 3rd order Sellmeier function.
             
             Parameters:
                 x: int, float, np.array, pd.Series
-                B,C = constants of the Sellmeier equation
+                B,C = constants of the Sellmeier equation for real part of the refractive index
+                b = constants for the extinction part of the refractive index
             
             Returns:
             The output of the 3rd order Sellmeier function:
-                - a single number: int, float
-                - a np.array, pd.Series: np.array, pd.Series, respectively
+                - a pd.DataFrame
                 
             """
             
-            Sellm = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+            # Here define the Sellmeier_n function
+            def Sellmeier_n(x, B1, C1, B2, C2, B3, C3):
+                """
+                A 3rd order Sellmeier function.
             
-            return Sellm
-        
-        dane = self.data
+                Parameters:
+                    x: int, float, np.array, pd.Series
+                    B,C = constants of the Sellmeier equation for real part of the refractive index
+            
+                Returns:
+                The output of the 3rd order Sellmeier function:
+                    - a pd.DataFrame
+                
+                """
+            
+                Sellm_n = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+                Sellm = pd.concat([x, Sellm_n**0.5], axis=1, keys=["Wavelength", "n"])
+            
+                return Sellm_n
+                
+            dane = self.data
     
-        # Preprocess the data
-        Sellm_fit = pd.concat([dane.iloc[:,0], dane.iloc[:,1] ** 2], axis = 1,
-                              keys = [dane.columns[0], 'n squared'])
+            # Preprocess the data
+            Sellm_fit = pd.concat([dane.iloc[:,0], dane.iloc[:,1] ** 2, dane.iloc[:,2]], axis = 1,
+                                  keys = [dane.columns[0], "n squared", "k"])
 
-        # Run optimization on the glass data
-        """
-        The optimizing parameters are based on Sellmeier constants for existing glasses.
-        p0 initializing values are set on the order of the constants for fused silica.
-        """
+            # Run optimization on the glass data
+            """
+            The optimizing parameters are based on Sellmeier constants for existing glasses.
+            p0 initializing values are set on the order of the constants for fused silica.
+            """
         
-        xdata = Sellm_fit.iloc[:,0]
-        ydata = Sellm_fit['n squared']
-        popt, pcov = optimize.curve_fit(Sellmeier, xdata, ydata,
-                                        bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
-                                        p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
-
-        # fill the fitted constants (popt) to the table of constants
-        for j in range(6):
-            self.constants.loc[self.constants.index[j]] = popt[j]
+            xdata = Sellm_fit.iloc[:,0]
+            ydata_n = Sellm_fit["n squared"]
+            ydata_k = Sellf_fit["k"]
+        
+            popt_n, pcov_n = optimize.curve_fit(Sellmeier_n, xdata, ydata_n,
+                                                bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
+                                                p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
+        
+            # fill the fitted constants (popt) to the table of constants
+            self.constants.iloc[0,1] = popt_n[0]
+            self.constants.iloc[1,1] = popt_n[1]
+            self.constants.iloc[3,1] = popt_n[2]
+            self.constants.iloc[4,1] = popt_n[3]
+            self.constants.iloc[6,1] = popt_n[4]
+            self.constants.iloc[7,1] = popt_n[5]
+            
+            
+            
+            def Sellmeier_k(self, x, b1, b2, b3):
+                
+                B1 = self.constants.iloc[0,1]
+                C1 = self.constants.iloc[1,1]
+                B2 = self.constants.iloc[3,1]
+                C2 = self.constants.iloc[4,1]
+                B3 = self.constants.iloc[6,1]
+                C3 = self.constants.iloc[7,1]
+                
+                Sellm_n = Sellm_n = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+                Sellm_k = (Sellm_n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
+                
+                Sellm_k_result = pd.concat([x, Sellm_k], axis=1, keys=["Wavelength", "k"])
+                
+                return Sellm_k_result
+            
+            popt_k, pcov_k = optimize.curve_fit(Sellmeier_k, xdata, ydata_k,
+                                                bounds = (0, [10., 10., 10.]),
+                                                p0 = [0.5, 0.5, 0.5])
+            
+            # fill the fitted constants (popt) to the table of constants
+            self.constants.iloc[2,1] = popt_k[0]
+            self.constants.iloc[5,1] = popt_k[1]
+            self.constants.iloc[8,1] = popt_k[2]
+            
+            return None
     
         return self.constants
     
