@@ -478,10 +478,10 @@ class Sellmeier:
     """
     
 
-    constants = None
+    constants = {}
     data = None
     
-    def __init__(self, data):
+    def __init__(self, data, model: str = "Sellmeier"):
         """
         data:
             A table of shape (a,b), where b=3;
@@ -504,56 +504,105 @@ class Sellmeier:
         # Add "Energy, eV" column - 1e6 scaling factor for assumed wavelength in microns
         self.data["Wavelength, eV"] = 1e6 * h*c*Jev / self.data["Wavelength"]
         
-        # Initiate an empty table of constants
+        # Initiate an empty dict with tables of constants
         
-        terms = []
-        for j in range(1,4):
-            symb = ("B", "C", "b")
-            for k in symb:
-                terms.append(k+str(j))
-    
-        self.constants = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        if model == "Sellmeier":
+            
+            terms = []
+            for j in range(1,4):
+                symb = ("B", "C", "b")
+                for k in symb:
+                    terms.append(k+str(j))
 
+            self.constants["Sellmeier"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        
+        elif model == "Forouhi-Bloomer":
+            
+            terms = ["n_inf", "Eg, ""A", "B", "C"]
+
+            self.constants["Forouhi-Bloomer"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        else:
+            raise Exception("Invalid model name.")
     
 
     def model(self, x):
-        """
-        A 3rd order Sellmeier function.
+        
+        if model == "Sellmeier":
+            """
+            A 3rd order Sellmeier function.
+
+            Parameters:
+                x: int, float, np.array, pd.Series
+
+            Returns:
+                Refractive index as fitted with the 3rd order Sellmeier function:
+                - pd.DataFrame
+
+            """
+            B1 = self.constants["Sellmeier"]["B1"]
+            C1 = self.constants["Sellmeier"]["C1"]
+            B2 = self.constants["Sellmeier"]["B2"]
+            C2 = self.constants["Sellmeier"]["C2"]
+            B3 = self.constants["Sellmeier"]["B3"]
+            C3 = self.constants["Sellmeier"]["C3"]
+            b1 = self.constants["Sellmeier"]["b1"]
+            b2 = self.constants["Sellmeier"]["b2"]
+            b3 = self.constants["Sellmeier"]["b3"]
+
+            # READ the input data
+            typ = type(x)
+
+            if typ == pd.DataFrame:
+                x = x.iloc[:,0]
+            elif typ == np.ndarray:
+                x = pd.DataFrame(x).iloc[:,0]
+            elif typ == list:
+                x = pd.Series(x, name="Wavelength")
+            elif ((typ == int)|(typ == float)):
+                x = pd.DataFrame(x, columns="Wavelength")
+
+            Sellm_n = (1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3))**0.5
+            Sellm_k = (Sellm_n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
+
+            return pd.concat([x, Sellm_n, Sellm_k], axis=1, keys=["Wavelength", "n", "k"])
+        
+        elif model == "Forouhi-Bloomer":
+            """
+            Short description of the model
+            """
             
-        Parameters:
-            x: int, float, np.array, pd.Series
+            self.constants["Forouhi-Bloomer"]["n_inf"] == n_inf
+            self.constants["Forouhi-Bloomer"]["Eg"] == Eg
+            self.constants["Forouhi-Bloomer"]["A"] == A
+            self.constants["Forouhi-Bloomer"]["B"] == B
+            self.constants["Forouhi-Bloomer"]["C"] == C
             
-        Returns:
-            Refractive index as fitted with the 3rd order Sellmeier function:
-            - pd.DataFrame
+            # READ the input data
+            typ = type(x)
+
+            if typ == pd.DataFrame:
+                x = x.iloc[:,0]
+            elif typ == np.ndarray:
+                x = pd.DataFrame(x).iloc[:,0]
+            elif typ == list:
+                x = pd.Series(x, name="Wavelength")
+            elif ((typ == int)|(typ == float)):
+                x = pd.DataFrame(x, columns="Wavelength")
                 
-        """
-        B1 = self.constants["B1"]
-        C1 = self.constants["C1"]
-        B2 = self.constants["B2"]
-        C2 = self.constants["C2"]
-        B3 = self.constants["B3"]
-        C3 = self.constants["C3"]
-        b1 = self.constants["b1"]
-        b2 = self.constants["b2"]
-        b3 = self.constants["b3"]
-        
-        # READ the input data
-        typ = type(x)
-        
-        if typ == pd.DataFrame:
-            x = x.iloc[:,0]
-        elif typ == np.ndarray:
-            x = pd.DataFrame(x).iloc[:,0]
-        elif typ == list:
-            x = pd.Series(x, name="Wavelength")
-        elif ((typ == int)|(typ == float)):
-            x = pd.DataFrame(x, columns="Wavelength")
-        
-        Sellm_n = (1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3))**0.5
-        Sellm_k = (Sellm_n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
-            
-        return pd.concat([x, Sellm_n, Sellm_k], axis=1, keys=["Wavelength", "n", "k"])
+            # Transform wavelengths into energies.
+            # WARNING! Assumption is made that wavelength is in um - scaling factor of 1e6
+            x = 1e6 * h*c*Jev / x
+
+            # Initiate Forouhi-Bloomer complex constants
+            Q = 0.5 * (4*C - B**2)**0.5
+            B_0 = (A / Q) * (-0.5*B**2 + Eg*B - Eg**2 + C)
+            C_0 = (A / Q) * (0.5*B * (Eg**2 + C) - 2*Eg*C)
+
+
+            FH_n = n_inf + (B_0*x + C_0) / (x**2 - B*x - C)
+            FH_k = (A * (x - Eg)**2) / (x**2 - B*x + C)
+
+            return pd.concat([x, FH_n, FH_k], axis=1, keys=["Energy, eV", "n", "k"])
     
     def fit_data(self):        
         # Here define the Sellmeier_n function
@@ -639,46 +688,3 @@ class Sellmeier:
         fit = self.model(x)
         fitted = plt.plot(fit.iloc[:,0], fit.iloc[:,1], c="black")
         return fitted
-        
-# Define Forouhi-Bloomer formula for modelling k
-def FH_k(x, Eg, A, B, C):
-    
-    k = (A * (x - Eg)**2) / (x**2 - B*x + C)
-    
-    return k
-
-#Preprocess the fitting data
-xfit = dane["Wavelength, eV"]
-yfit_k = dane["k"]
-yfit_n = dane["n"]
-
-# Optimize the fitting parameters
-FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, xfit, yfit_k)
-
-Eg = FH_k_parameters[0]
-A = FH_k_parameters[1]
-B = FH_k_parameters[2]
-C = FH_k_parameters[3]
-
-self.constants["Forouhi-Bloomer"]["Eg"] = Eg
-self.constants["Forouhi-Bloomer"]["A"] = A
-self.constants["Forouhi-Bloomer"]["B"] = B
-self.constants["Forouhi-Bloomer"]["C"] = C
-
-# Define the Forouhi-Bloomer formula for modelling n
-def FH_n(x, n_inf, Eg, A, B, C):
-    
-    Q = 0.5 * (4*C - B**2)**0.5
-    B_0 = (A / Q) * (-0.5*B**2 + Eg*B - Eg**2 + C)
-    C_0 = (A / Q) * (0.5*B * (Eg**2 + C) - 2*Eg*C)
-    
-    
-    n = n_inf + (B_0*x + C_0) / (x**2 - B*x - C)
-    
-    return n
-
-# Optimize the fitting parameters
-FH_n_parameters, FHn_cov = optimize.curve_fit(lambda x, n_inf: FH_n(x, n_inf, Eg = Eg, A = A, B = B, C = C),
-                                              xfit, yfit_n)
-
-self.constants["Forouhi-Bloomer"]["n_inf"] = FH_n_parameters[0]
