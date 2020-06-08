@@ -7,6 +7,13 @@ import matplotlib.colors
 from scipy import optimize
 from scipy import integrate
 from scipy import stats
+import scipy.constants as constants
+
+# Get the important physical constants
+h = constants.physical_constants["Planck constant"][0]
+c = constants.physical_constants["speed of light in vacuum"][0]
+Jev = constants.physical_constants["joule-electron volt relationship"][0]
+
 
 class OpticalMaterial:
     """
@@ -401,6 +408,17 @@ class SpectralMeasurement:
         
         return transmittance
     
+    def plot(feature: str = "T", low: float = None, high: float = None):
+        """
+        Plots the specified feature with respect to the wavelength.
+        """
+        
+        # Transmittance
+        if feature == "T":
+            data = self.T
+            plot = plt.plot(data)
+        
+    
     def align_datasets(self):
         
         """
@@ -450,23 +468,24 @@ class Sellmeier:
         input: x
         output: Sellmeier(x)
         
-        Outputs the Sellmeier equation fitted refractive index (not n^2) with constants B_i, C_i (i=1...3).
+        Outputs the Sellmeier equation fitted refractive index (not n^2) with constants B_i, C_i (i=1...3)
+        and extinction coefficient with constants b_i (i=1...3).
     
     fit_data:
         input: real refractive index data, Refractive Index vs. Wavelength
             
-        output: Sellmeier constants B_i, C_i (i=1...3)
+        output: Sellmeier constants for n: B_i, C_i (i=1...3) and for k: b_i (i=1...3)
     """
     
 
-    constants = None
+    constants = {}
     data = None
     
-    def __init__(self, data):
+    def __init__(self, data, model: str = "Sellmeier"):
         """
         data:
-            A table of shape (a,b), where b>=2;
-            1st column - wavelength, 2nd column - real refractive index.
+            A table of shape (a,b), where b=3;
+            1st column - wavelength, 2nd column - real refractive index, 3rd column - imaginary refractive index.
             Available formats: pd.DataFrame, np.array, .csv sourcefile
         """
         # READ the input data
@@ -476,100 +495,187 @@ class Sellmeier:
         if typ == pd.DataFrame:
             d = data
         elif typ == np.ndarray:
-            d = pd.Dataframe(data, columns=["Wavelength", "n"])
+            d = pd.Dataframe(data, columns=["Wavelength", "n", "k"])
         elif ((typ == str)&(data[-4:] == ".csv")):
-            d = pd.read_csv(data).drop(labels=["k"], axis=1)
+            d = pd.read_csv(data)
             
         self.data = d
         
-        # Initiate an empty table of constants
+        # Add "Energy, eV" column - 1e6 scaling factor for assumed wavelength in microns
+        self.data["Wavelength, eV"] = 1e6 * h*c*Jev / self.data["Wavelength"]
         
-        terms = []
-        for j in range(1,4):
-            symb = ("B", "C")
-            for k in symb:
-                terms.append(k+str(j))
-    
-        self.constants = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        # Initiate an empty dict with tables of constants
+        
+        if model == "Sellmeier":
+            
+            terms = []
+            for j in range(1,4):
+                symb = ("B", "C", "b")
+                for k in symb:
+                    terms.append(k+str(j))
 
+            self.constants["Sellmeier"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        
+        elif model == "Forouhi-Bloomer":
+            
+            terms = ["n_inf", "Eg, ""A", "B", "C"]
+
+            self.constants["Forouhi-Bloomer"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        else:
+            raise Exception("Invalid model name.")
     
 
     def model(self, x):
-        """
-        A 3rd order Sellmeier function.
+        
+        if model == "Sellmeier":
+            """
+            A 3rd order Sellmeier function.
+
+            Parameters:
+                x: int, float, np.array, pd.Series
+
+            Returns:
+                Refractive index as fitted with the 3rd order Sellmeier function:
+                - pd.DataFrame
+
+            """
+            B1 = self.constants["Sellmeier"]["B1"]
+            C1 = self.constants["Sellmeier"]["C1"]
+            B2 = self.constants["Sellmeier"]["B2"]
+            C2 = self.constants["Sellmeier"]["C2"]
+            B3 = self.constants["Sellmeier"]["B3"]
+            C3 = self.constants["Sellmeier"]["C3"]
+            b1 = self.constants["Sellmeier"]["b1"]
+            b2 = self.constants["Sellmeier"]["b2"]
+            b3 = self.constants["Sellmeier"]["b3"]
+
+            # READ the input data
+            typ = type(x)
+
+            if typ == pd.DataFrame:
+                x = x.iloc[:,0]
+            elif typ == np.ndarray:
+                x = pd.DataFrame(x).iloc[:,0]
+            elif typ == list:
+                x = pd.Series(x, name="Wavelength")
+            elif ((typ == int)|(typ == float)):
+                x = pd.DataFrame(x, columns="Wavelength")
+
+            Sellm_n = (1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3))**0.5
+            Sellm_k = (Sellm_n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
+
+            return pd.concat([x, Sellm_n, Sellm_k], axis=1, keys=["Wavelength", "n", "k"])
+        
+        elif model == "Forouhi-Bloomer":
+            """
+            Short description of the model
+            """
             
-        Parameters:
-            x: int, float, np.array, pd.Series
+            self.constants["Forouhi-Bloomer"]["n_inf"] == n_inf
+            self.constants["Forouhi-Bloomer"]["Eg"] == Eg
+            self.constants["Forouhi-Bloomer"]["A"] == A
+            self.constants["Forouhi-Bloomer"]["B"] == B
+            self.constants["Forouhi-Bloomer"]["C"] == C
             
-        Returns:
-            Refractive index as fitted with the 3rd order Sellmeier function:
-            - pd.DataFrame
+            # READ the input data
+            typ = type(x)
+
+            if typ == pd.DataFrame:
+                x = x.iloc[:,0]
+            elif typ == np.ndarray:
+                x = pd.DataFrame(x).iloc[:,0]
+            elif typ == list:
+                x = pd.Series(x, name="Wavelength")
+            elif ((typ == int)|(typ == float)):
+                x = pd.DataFrame(x, columns="Wavelength")
                 
-        """
-        B1 = self.constants["B1"]
-        C1 = self.constants["C1"]
-        B2 = self.constants["B2"]
-        C2 = self.constants["C2"]
-        B3 = self.constants["B3"]
-        C3 = self.constants["C3"]
-        
-        # READ the input data
-        typ = type(x)
-        
-        if typ == pd.DataFrame:
-            x = x.iloc[:,0]
-        elif typ == np.ndarray:
-            x = pd.DataFrame(x).iloc[:,0]
-        elif typ == list:
-            x = pd.Series(x, name="Wavelength")
-        elif ((typ == int)|(typ == float)):
-            x = pd.DataFrame(x, columns="Wavelength")
-        
-        Sellm = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
-            
-        return pd.concat([x, Sellm**0.5], axis=1, keys=["Wavelength", "n"])
+            # Transform wavelengths into energies.
+            # WARNING! Assumption is made that wavelength is in um - scaling factor of 1e6
+            x = 1e6 * h*c*Jev / x
+
+            # Initiate Forouhi-Bloomer complex constants
+            Q = 0.5 * (4*C - B**2)**0.5
+            B_0 = (A / Q) * (-0.5*B**2 + Eg*B - Eg**2 + C)
+            C_0 = (A / Q) * (0.5*B * (Eg**2 + C) - 2*Eg*C)
+
+
+            FH_n = n_inf + (B_0*x + C_0) / (x**2 - B*x - C)
+            FH_k = (A * (x - Eg)**2) / (x**2 - B*x + C)
+
+            return pd.concat([x, FH_n, FH_k], axis=1, keys=["Energy, eV", "n", "k"])
     
-    def fit_data(self):
-        def Sellmeier(x, B1, C1, B2, C2, B3, C3):
+    def fit_data(self):        
+        # Here define the Sellmeier_n function
+        def Sellmeier_n(x, B1, C1, B2, C2, B3, C3):
             """
             A 3rd order Sellmeier function.
             
             Parameters:
                 x: int, float, np.array, pd.Series
-                B,C = constants of the Sellmeier equation
+                B,C = constants of the Sellmeier equation for real part of the refractive index
             
             Returns:
             The output of the 3rd order Sellmeier function:
-                - a single number: int, float
-                - a np.array, pd.Series: np.array, pd.Series, respectively
+                    - a pd.DataFrame
                 
             """
             
-            Sellm = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+            Sellm_n = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
             
-            return Sellm
-        
+            return Sellm_n
+                
         dane = self.data
     
         # Preprocess the data
-        Sellm_fit = pd.concat([dane.iloc[:,0], dane.iloc[:,1] ** 2], axis = 1,
-                              keys = [dane.columns[0], 'n squared'])
+        Sellm_fit = pd.concat([dane.iloc[:,0], dane.iloc[:,1] ** 2, dane.iloc[:,2]], axis = 1,
+                              keys = [dane.columns[0], "n squared", "k"])
 
         # Run optimization on the glass data
         """
         The optimizing parameters are based on Sellmeier constants for existing glasses.
         p0 initializing values are set on the order of the constants for fused silica.
         """
-        
-        xdata = Sellm_fit.iloc[:,0]
-        ydata = Sellm_fit['n squared']
-        popt, pcov = optimize.curve_fit(Sellmeier, xdata, ydata,
-                                        bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
-                                        p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
 
+        xdata = Sellm_fit.iloc[:,0]
+        ydata_n = Sellm_fit["n squared"]
+        ydata_k = Sellm_fit["k"]
+        
+        popt_n, pcov_n = optimize.curve_fit(Sellmeier_n, xdata, ydata_n,
+                                            bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
+                                            p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
+        
+        
         # fill the fitted constants (popt) to the table of constants
-        for j in range(6):
-            self.constants.loc[self.constants.index[j]] = popt[j]
+        self.constants.loc["B1"] = popt_n[0]
+        self.constants.loc["C1"] = popt_n[1]
+        self.constants.loc["B2"] = popt_n[2]
+        self.constants.loc["C2"] = popt_n[3]
+        self.constants.loc["B3"] = popt_n[4]
+        self.constants.loc["C3"] = popt_n[5]
+            
+        def Sellmeier_k(x, b1, b2, b3, B1 = popt_n[0], C1 = popt_n[1], B2 = popt_n[2], C2 = popt_n[3],
+                        B3 = popt_n[4], C3 = popt_n[5]):
+                
+            """
+            Fits the 3rd order Sellmeier formula for the extinction part of the refractive index.
+            """
+                
+            n = (1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3))**0.5
+            Sellm_k = (n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
+                
+            return Sellm_k
+        
+        _Sellmeier_k = lambda x, b1, b2, b3: Sellmeier_k(x, b1, b2, b3)
+        
+        popt_k, pcov_k = optimize.curve_fit(_Sellmeier_k ,xdata, ydata_k, p0 = [0.5, 0.5, 0.5])
+        
+        print(popt_k)
+        print(pcov_k)
+        
+        # fill the fitted constants (popt) to the table of constants
+        self.constants.loc["b1"] = popt_k[0]
+        self.constants.loc["b2"] = popt_k[1]
+        self.constants.loc["b3"] = popt_k[2]
     
         return self.constants
     
