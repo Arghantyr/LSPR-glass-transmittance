@@ -604,7 +604,31 @@ class Sellmeier:
 
             return pd.concat([x, FH_n, FH_k], axis=1, keys=["Energy, eV", "n", "k"])
     
-    def fit_data(self):        
+    def fit_data(self, model: str = "Sellmeier"):
+        """
+        Fit source data according to the specified model.
+        
+        Parameters:
+        -----------
+        
+        model: str = "Sellmeier"
+            Model to be used t=for fitting n, k source data. Accepts two values: "Sellmeier or "Forouhi-Bloomer".
+            Defaults to 3rd order Sellmeier for n and k.
+            
+        Returns:
+        -----------
+        
+        Fitting constants for the specified model:
+            Sellmeier:
+                B_i, C_i   1=(1...3) - refractive index
+                b_i        i=(1...3) - extinction coefficient
+            
+            Forouhi-Bloomer:
+                n_inf     -   refractive index at infinite energy
+                Eg        -   energy band gap of the glass
+                A, B, C   -   band structure dependent constants
+        """
+        
         # Here define the Sellmeier_n function
         def Sellmeier_n(x, B1, C1, B2, C2, B3, C3):
             """
