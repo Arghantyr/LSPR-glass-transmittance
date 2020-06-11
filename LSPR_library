@@ -479,7 +479,7 @@ class Sellmeier:
     """
     
     
-    def __init__(self, data, model: str = "Sellmeier"):
+    def __init__(self, data):
         """
         data:
             A table of shape (a,b), where b=3;
@@ -510,23 +510,21 @@ class Sellmeier:
         
         # Initiate an empty dict with tables of constants
         
-        if model == "Sellmeier":
-            
-            terms = []
-            for j in range(1,4):
-                symb = ("B", "C", "b")
-                for k in symb:
-                    terms.append(k+str(j))
-
-            self.constants["Sellmeier"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        # Initiate Sellmeier constants table with 0's
+        terms = []
         
-        elif model == "Forouhi-Bloomer":
-            
-            terms = ["n_inf", "Eg", "A", "B", "C"]
+        for j in range(1,4):
+            symb = ("B", "C", "b")
+            for k in symb:
+                terms.append(k+str(j))
 
-            self.constants["Forouhi-Bloomer"] = pd.Series([0 for _ in range(4)], name="Value").reindex(terms)
-        else:
-            raise Exception("Invalid model name.")
+        self.constants["Sellmeier"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        
+        
+        # Initiate Forouhi-Bloomer constants table with 0's
+        terms = ["n_inf", "Eg", "A", "B", "C"]
+
+        self.constants["Forouhi-Bloomer"] = pd.Series([0 for _ in range(4)], name="Value").reindex(terms)
     
 
     def model(self, x, model: str = "Sellmeier"):
@@ -707,9 +705,6 @@ class Sellmeier:
 
             popt_k, pcov_k = optimize.curve_fit(_Sellmeier_k ,xdata, ydata_k, p0 = [0.5, 0.5, 0.5])
 
-            print(popt_k)
-            print(pcov_k)
-
             # fill the fitted constants (popt) to the table of constants
             self.constants["Sellmeier"]["b1"] = popt_k[0]
             self.constants["Sellmeier"]["b2"] = popt_k[1]
@@ -789,11 +784,36 @@ class Sellmeier:
         
         """
         
-        experimental = plt.scatter(self.data.iloc[:,0], self.data.iloc[:,1])
+        plt.figure(figsize = (12,7))
         
         x_min = self.data.iloc[0,0]
         x_max = self.data.iloc[-1,0]
+        ymin_k = self.data["k"].min() * 1.1
+        ymax_k = self.data["k"].max() * 1.1
         x = np.linspace(x_min, x_max, 1000)
         fit = self.model(x, model=model)
-        fitted = plt.plot(fit.iloc[:,0], fit.iloc[:,1], c="black")
-        return fitted
+        
+        # plot refractive index
+        plt.subplot(1,2,1)
+        experimental_n = plt.scatter(self.data["Wavelength"], self.data["n"], alpha=0.5, s=20)
+        plt.title("{} fit for refractive index".format(model), size=13)
+        plt.plot(fit["Wavelength"], fit["n"], c="black")
+        plt.xlabel("Wavelength", size=19)
+        plt.ylabel("Refractive index, a.u.", size=19)
+        plt.xticks(size=13)
+        plt.yticks(size=13)
+        
+        # plot the extinction coefficient
+        plt.subplot(1,2,2)
+        
+        experimental_k = plt.scatter (self.data["Wavelength"], self.data["k"], alpha=0.5, s=20)
+        plt.title("{} fit for extinction coefficient".format(model), size=13)
+        plt.plot(fit["Wavelength"], fit["k"], c="black")
+        plt.ylim(ymin_k, ymax_k)
+        plt.xlabel("Wavelength", size=19)
+        plt.ylabel("Extinction coefficient, a.u.", size=19)
+        plt.xticks(size=13)
+        plt.yticks(size=13)
+        plt.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
+        
+        plt.tight_layout()
