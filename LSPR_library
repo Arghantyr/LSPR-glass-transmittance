@@ -101,7 +101,7 @@ class OpticalMaterial:
         self.real_permittivity = self.permittivity.drop(columns=["Imaginary permittivity, a.u."])
         self.imaginary_permittivity = self.permittivity.drop(columns=["Real permittivity, a.u."])
 
-    def even_xspacing(self, optical_property = self.refractive_index, left_bound: float = None,
+    def even_xspacing(self, optical_property, left_bound: float = None,
                          right_bound: float = None, spacing: float = None):
         
         """
@@ -248,6 +248,8 @@ class SpectralMeasurement:
         self.nanoparticle_concentration = nanoparticle.concentration
         self.nanoparticle_size = nanoparticle.size
         self.nanoparticle_stdev = nanoparticle.stdev
+        self.f_abs = None
+        self.f_sca = None
         self.cross_sections = {"absorption": None, "scattering": None}
         
         # Reflectance
@@ -269,10 +271,10 @@ class SpectralMeasurement:
         pi = np.pi       
         
         def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
-            
+
             """
             A function determining the position and shape of the absorption cross section.
-            
+
             Parameters:
                 eps_m:
                     Real permittivity of the matrix. [a.u]
@@ -286,21 +288,21 @@ class SpectralMeasurement:
                     Total concentration of nanoparticles. [1/cm3]
                 t:
                     Sample thickness. [µm]
-                
+
             """
-            
+
             c_abs = ((0.8686 * (pi ** 5)) * 1e-30) / 3
             L_abs = c_abs * C_tot * t * (((eps_m ** 2) / (l_0 ** 4)) * (((e_1 - eps_m) ** 2) + (e_2 ** 2)))
             M_abs = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
             f_abs = L_abs / M_abs
             return f_abs
-        
+
         # Define f_sca function
         def f_sca(eps_m, e_1, e_2, l_0, C_tot, t):
-            
+
             """
             A function determining the position and shape of the scattering cross section.
-            
+
             Parameters:
                 eps_m:
                     Real permittivity of the matrix. [a.u]
@@ -315,20 +317,20 @@ class SpectralMeasurement:
                 t:
                     Sample thickness. [µm]
             """
-            
+
             c_sca = 1.3029 * (pi ** 2) * 1e-21
             L_sca = c_sca * C_tot * t * (((eps_m ** 1.5) / l_0) * e_2)
             M_sca = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
             f_sca = L_sca / M_sca
             return f_sca
-        
+
         # Define integrals 1 and 2 - I_1
         def I_1(d, n, mean, sd):
-            
+
             """
             Integrated n-th order power of the normally distributed diameter as part
             of the absorption and scattering cross sections of the Mie dipol approximation.
-            
+
             Parameters:
                 d:
                     diameter of the nanoparticles
@@ -338,12 +340,12 @@ class SpectralMeasurement:
                     mean size of the nanoparticle size distribution in [nm]
                 sd:
                     standard deviation of the nanoparticle distribution in [nm]
-                    
+
             Returns:
                 Integral of product:
                     normal distribution N(mean, sd)   X   d**n
             """
-            
+
             def integrand(d,n,mean,sd):
                 return (d**n)*stats.norm.pdf(d, loc=mean, scale=sd)
             return integrate.simps(integrand(d,n,mean,sd))
@@ -374,6 +376,10 @@ class SpectralMeasurement:
 
         self.Abs = pd.concat([l_0, A_comp], axis=1,
                              keys=[self.matrix_refractive_index.columns[0], "Absorbance, a.u."])
+        self.f_abs = pd.concat([l_0, f_abs(eps_m, e_1, e_2, l_0, C_tot, t)], axis=1,
+                               keys=[self.matrix_refractive_index.columns[0], "f_abs"])
+        self.f_sca = pd.concat([l_0, f_sca(eps_m, e_1, e_2, l_0, C_tot, t)], axis=1,
+                               keys=[self.matrix_refractive_index.columns[0], "f_sca"])
         
         
     def T(self, R_corr: bool=True):
