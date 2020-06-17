@@ -101,7 +101,7 @@ class OpticalMaterial:
         self.real_permittivity = self.permittivity.drop(columns=["Imaginary permittivity, a.u."])
         self.imaginary_permittivity = self.permittivity.drop(columns=["Real permittivity, a.u."])
 
-    def regular_xspacing(self, optical_property = self.refractive_index, left_bound: float = None,
+    def even_xspacing(self, optical_property = self.refractive_index, left_bound: float = None,
                          right_bound: float = None, spacing: float = None):
         
         """
