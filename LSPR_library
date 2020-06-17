@@ -1,6 +1,24 @@
+# Import dependencies
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors
+from scipy import optimize
+from scipy import integrate
+from scipy import stats
+import scipy.constants as constants
+
+# Get the important physical constants
+h = constants.physical_constants["Planck constant"][0]
+c = constants.physical_constants["speed of light in vacuum"][0]
+Jev = constants.physical_constants["joule-electron volt relationship"][0]
+
+
 class OpticalMaterial:
     """
     A class for any material to be considered for its optical properties.
+    
     Takes a tabular source file (.csv or pd.DataFrame) of form: Wavelength, n, k.
     Stores the refractive index and electric permittivity.
     
@@ -54,14 +72,17 @@ class OpticalMaterial:
         """
         # Handle the name
         if type(name) == str:
-            self.name = name
+            if name[-4:] == ".csv":
+                raise NameError("Invalid type for the 'name'. Must be 'str'.")
+            else:
+                self.name = name
         else:
-            raise Exception("Invalid type for the 'name'. Must be 'str'.")
+            raise NameError("Invalid type for the 'name'. Must be 'str'.")
         
         
         # Handle the source
         if type(source) == str:
-            if str[-4:] == '.csv':
+            if source[-4:] == '.csv':
                 self.refractive_index = pd.read_csv(source)
             else:
                 raise Exception("Invalid sourcefile. Only '.csv' or 'pd.DataFrame' type accepted.")
@@ -148,3 +169,646 @@ class OpticalMaterial:
             
     def __repr__(self):
         return "{} material".format(self.name)
+        
+        
+
+class Nanoparticle:
+    
+    """
+    Typical properties of nanoparticles:
+    size, concentration, size distribution.
+    """
+    
+    def __init__(self, name: str=None, material: OpticalMaterial=None, size: float=10,
+                 stdev: float=1, concentration: float=1e18):
+        
+        """
+        Initializes the Nanoparticle object.
+        
+        Parameters:
+            name: str
+                The name of the Nanoparticle object.
+            material: OpticalMaterial
+                The material the nanoparticles will be made of.
+            size:
+                Mean size of the nanoparticle population. [nm]
+            stdev:
+                Standard deviation of the nanoparticle size distribution. [nm]
+            concentration:
+                Total concentration of nanoparticles. [1/cm3]
+            
+        """
+        
+        self.name = name
+        self.material = material
+        self.size = size
+        self.stdev = stdev
+        self.concentration = concentration
+        
+    def modify(self, feature, new):
+
+        if feature == self.material:
+            self.material = new
+        elif feature == self.size:
+            self.size = new
+        elif feature == self.concentration:
+            self.concentration = new
+        elif feature == self.stdev:
+            self.stdev = new
+        
+    def __repr__(self):
+        return "{} nanoparticle with size {}±{} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
+            self.material, self.size, self.stdev, self.concentration)
+
+
+class SpectralMeasurement:
+    """
+    Basic spectral measurements: absorbance, transmittance
+    """
+    
+    
+    def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
+                 thickness: float=1):
+        
+        """
+        Presets the simulation of a spectral measurement of the matrix-nanoparticle composite of known thickness.
+        """
+        
+        self.name = name
+        self.thickness = thickness
+        self.matrix = matrix
+        self.nanoparticle = nanoparticle
+        self.matrix_refractive_index = matrix.refractive_index
+        self.matrix_real_permittivity = matrix.permittivity.iloc[:,1]
+        self.nanoparticle_permittivity = nanoparticle.material.permittivity
+        self.nanoparticle_concentration = nanoparticle.concentration
+        self.nanoparticle_size = nanoparticle.size
+        self.nanoparticle_stdev = nanoparticle.stdev
+        self.cross_sections = {"absorption": None, "scattering": None}
+        
+        # Reflectance
+        L = 1 - self.matrix_refractive_index['n']
+        M = 1 + self.matrix_refractive_index['n']
+        reflectance = 100 * abs(L/M)**2
+        self.mreflectance = pd.concat([self.matrix_refractive_index.iloc[:,0], reflectance], axis=1,
+                                      keys=[self.matrix_refractive_index.columns[0], "Reflectance, %"])
+        
+        # Raise exception if datasets are not aligned, i.e.: wavelength subsets are not identical.
+        
+        set_difference = matrix.permittivity.iloc[:,0] - nanoparticle.material.permittivity.iloc[:,0]
+        if set_difference.any() != 0:
+            raise Exception("The Matrix and Nanoparticle wavelengths are different. Align the data with 'align_datasets', 'regular_xspacing' or other tool to avoid incorrect results.")
+        
+        # Absorbance
+        
+        # Define f_abs function
+        pi = np.pi       
+        
+        def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
+            
+            """
+            A function determining the position and shape of the absorption cross section.
+            
+            Parameters:
+                eps_m:
+                    Real permittivity of the matrix. [a.u]
+                e_1:
+                    Real permittivity of the material of the nanoparticles. [a.u.]
+                e_2:
+                    Imaginary permittivity of the material of the nanoparticles. [a.u.]
+                l_0:
+                    Wavelength. [µm]
+                C_tot:
+                    Total concentration of nanoparticles. [1/cm3]
+                t:
+                    Sample thickness. [µm]
+                
+            """
+            
+            c_abs = ((0.8686 * (pi ** 5)) * 1e-30) / 3
+            L_abs = c_abs * C_tot * t * (((eps_m ** 2) / (l_0 ** 4)) * (((e_1 - eps_m) ** 2) + (e_2 ** 2)))
+            M_abs = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
+            f_abs = L_abs / M_abs
+            return f_abs
+        
+        # Define f_sca function
+        def f_sca(eps_m, e_1, e_2, l_0, C_tot, t):
+            
+            """
+            A function determining the position and shape of the scattering cross section.
+            
+            Parameters:
+                eps_m:
+                    Real permittivity of the matrix. [a.u]
+                e_1:
+                    Real permittivity of the material of the nanoparticles. [a.u.]
+                e_2:
+                    Imaginary permittivity of the material of the nanoparticles. [a.u.]
+                l_0:
+                    Wavelength. [µm]
+                C_tot:
+                    Total concentration of nanoparticles. [1/cm3]
+                t:
+                    Sample thickness. [µm]
+            """
+            
+            c_sca = 1.3029 * (pi ** 2) * 1e-21
+            L_sca = c_sca * C_tot * t * (((eps_m ** 1.5) / l_0) * e_2)
+            M_sca = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
+            f_sca = L_sca / M_sca
+            return f_sca
+        
+        # Define integrals 1 and 2 - I_1
+        def I_1(d, n, mean, sd):
+            
+            """
+            Integrated n-th order power of the normally distributed diameter as part
+            of the absorption and scattering cross sections of the Mie dipol approximation.
+            
+            Parameters:
+                d:
+                    diameter of the nanoparticles
+                n:
+                    order of the exponentiation
+                mean:
+                    mean size of the nanoparticle size distribution in [nm]
+                sd:
+                    standard deviation of the nanoparticle distribution in [nm]
+                    
+            Returns:
+                Integral of product:
+                    normal distribution N(mean, sd)   X   d**n
+            """
+            
+            def integrand(d,n,mean,sd):
+                return (d**n)*stats.norm.pdf(d, loc=mean, scale=sd)
+            return integrate.simps(integrand(d,n,mean,sd))
+        
+        n_glass = self.matrix_refractive_index['n']
+        k_glass = self.matrix_refractive_index['k']
+        eps_m = self.matrix_real_permittivity
+        l_0 = self.matrix_refractive_index.iloc[:,0]
+        e_1 = self.nanoparticle_permittivity.iloc[:,1]
+        e_2 = self.nanoparticle_permittivity.iloc[:,2]
+        d = np.linspace(0,100,100)
+        C_tot = self.nanoparticle_concentration
+        mean = self.nanoparticle_size
+        sd = self.nanoparticle_stdev
+        t = self.thickness
+
+        # Reflection losses - approximation using matrix only
+        mrefl_correction = 1 - 0.01 * self.mreflectance.iloc[:,1]
+    
+        # Define A_glass function
+        L1 = k_glass * t
+        A_matrix = 5.4576 * (L1 / l_0)
+
+        # A_nano - inner function
+        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd)
+
+        A_comp = A_matrix + A_nano
+
+        self.Abs = pd.concat([l_0, A_comp], axis=1,
+                             keys=[self.matrix_refractive_index.columns[0], "Absorbance, a.u."])
+        
+        
+    def T(self, R_corr: bool=True):
+        
+        """
+        Calculates the transmittance of the Matrix-Nanoparticle composite with the preset thickness.
+        
+        Parameters:
+            R_corr:
+                Reflectance correction. When True takes reflection losses into account. Uses Fresnel equation
+                approximation for 90 deg incidence and transition between composite and air.
+                
+        Returns:
+            T:
+                Transmittance of the composite. pd.DataFrame format.
+        """
+        
+        Abs = self.Abs.iloc[:,1]
+        # calculates the transmittance of the sample composite
+        transmittance = None
+        
+        if R_corr == True:
+            # evaluate corrected transmittance
+            transmittance = (1 - 0.01*self.mreflectance.iloc[:,1]) * np.exp(-(Abs))
+        else:
+            # evaluate without correction
+            transmittance = np.exp(-(Abs))
+            
+        transmittance = 100*transmittance
+        transmittance = pd.concat([self.matrix_refractive_index.iloc[:,0], transmittance], axis=1,
+                                  keys=[self.matrix_refractive_index.columns[0], "Transmittance, %"])
+        
+        return transmittance
+    
+    def plot(feature: str = "T", low: float = None, high: float = None):
+        """
+        Plots the specified feature with respect to the wavelength.
+        """
+        
+        # Transmittance
+        if feature == "T":
+            data = self.T
+            plot = plt.plot(data)
+        
+    
+    def align_datasets(self):
+        
+        """
+        Takes the combined Wavelength sets of Matrix and Nanoparticle (outer join)
+        and interpolates the missing data using linear approximation of neighbouring points.
+        
+        WARNING!
+        Can produce errors when large difference in datasets is present.
+        """
+        
+        # add x subsets of matrix and nanoparticle
+        mat_per = self.matrix.permittivity.iloc[:,0]
+        nano_per = self.nanoparticle.material.permittivity.iloc[:,0]
+        aligned_x_subset = pd.concat([mat_per, nano_per]).sort_values().reset_index(drop=True)
+
+        # interpolate data based on new x subset
+        interpolated_matrix_RI = pd.merge(aligned_x_subset, self.matrix.refractive_index,
+                                          how="outer").interpolate()
+        interpolated_matrix_real_permittivity = pd.merge(aligned_x_subset, self.matrix.permittivity,
+                                                         how="outer").interpolate().iloc[:,1]
+        interpolated_nanoparticle_permittivity = pd.merge(aligned_x_subset,
+                                                          self.nanoparticle.material.permittivity,
+                                                          how="outer").interpolate()
+        
+        # initialize a copy SpectralMeasurement
+        aligned_measurement = SpectralMeasurement("Aligned data measurement", matrix=self.matrix,
+                                                  nanoparticle=self.nanoparticle)
+        
+        # insert the interpolated input
+        aligned_measurement.matrix_refractive_index = interpolated_matrix_RI
+        aligned_measurement.matrix_real_permittivity = interpolated_matrix_real_permittivity
+        aligned_measurement.nanoparticle_permittivity = interpolated_nanoparticle_permittivity
+        
+        return aligned_measurement
+
+
+# Sellmeier fitting
+
+class Sellmeier:
+    
+    """
+    Class for fitting Sellmeier model to refractive index experimental data.
+    
+    Available methods:
+    
+    model:
+        input: x
+        output: Sellmeier(x)
+        
+        Outputs the Sellmeier equation fitted refractive index (not n^2) with constants B_i, C_i (i=1...3)
+        and extinction coefficient with constants b_i (i=1...3).
+    
+    fit_data:
+        input: real refractive index data, Refractive Index vs. Wavelength
+            
+        output: Sellmeier constants for n: B_i, C_i (i=1...3) and for k: b_i (i=1...3)
+    """
+    
+    
+    def __init__(self, data):
+        """
+        data:
+            A table of shape (a,b), where b=3;
+            1st column - wavelength, 2nd column - real refractive index, 3rd column - imaginary refractive index.
+            Available formats: pd.DataFrame, np.array, .csv sourcefile
+        """
+        
+        self.constants = {}
+        self.data = data
+        
+        # READ the input data
+        typ = type(data)
+        d = None
+        
+        if typ == pd.DataFrame:
+            d = data
+        elif typ == np.ndarray:
+            d = pd.Dataframe(data, columns=["Wavelength", "n", "k"])
+        elif ((typ == str)&(data[-4:] == ".csv")):
+            d = pd.read_csv(data)
+            
+        d.columns = ["Wavelength", "n", "k"]
+        
+        self.data = d
+        
+        # Add "Energy, eV" column - 1e6 scaling factor for assumed wavelength in microns
+        self.data["Wavelength, eV"] = 1e6 * h*c*Jev / self.data["Wavelength"]
+        
+        # Initiate an empty dict with tables of constants
+        
+        # Initiate Sellmeier constants table with 0's
+        terms = []
+        
+        for j in range(1,4):
+            symb = ("B", "C", "b")
+            for k in symb:
+                terms.append(k+str(j))
+
+        self.constants["Sellmeier"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
+        
+        
+        # Initiate Forouhi-Bloomer constants table with 0's
+        terms = ["n_inf", "Eg", "A", "B", "C"]
+
+        self.constants["Forouhi-Bloomer"] = pd.Series([0 for _ in range(4)], name="Value").reindex(terms)
+    
+
+    def model(self, x, model: str = "Sellmeier"):
+        
+        if model == "Sellmeier":
+            """
+            A 3rd order Sellmeier function.
+
+            Parameters:
+                x: int, float, np.array, pd.Series
+
+            Returns:
+                Refractive index as fitted with the 3rd order Sellmeier function:
+                - pd.DataFrame
+
+            """
+            B1 = self.constants["Sellmeier"]["B1"]
+            C1 = self.constants["Sellmeier"]["C1"]
+            B2 = self.constants["Sellmeier"]["B2"]
+            C2 = self.constants["Sellmeier"]["C2"]
+            B3 = self.constants["Sellmeier"]["B3"]
+            C3 = self.constants["Sellmeier"]["C3"]
+            b1 = self.constants["Sellmeier"]["b1"]
+            b2 = self.constants["Sellmeier"]["b2"]
+            b3 = self.constants["Sellmeier"]["b3"]
+
+            # READ the input data
+            typ = type(x)
+
+            if typ == pd.DataFrame:
+                x = x.iloc[:,0]
+            elif typ == np.ndarray:
+                x = pd.DataFrame(x).iloc[:,0]
+            elif typ == list:
+                x = pd.Series(x, name="Wavelength")
+            elif ((typ == int)|(typ == float)):
+                x = pd.DataFrame(x, columns="Wavelength")
+
+            Sellm_n = (1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3))**0.5
+            Sellm_k = (Sellm_n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
+
+            return pd.concat([x, Sellm_n, Sellm_k], axis=1, keys=["Wavelength", "n", "k"])
+        
+        elif model == "Forouhi-Bloomer":
+            """
+            Fit Forouhi-Bloomer model based on 5 parameters:
+
+            n_inf     -   refractive index at infinity energy
+            Eg        -   energy band gap
+            A, B, C   -   energy band structure-dependent constants
+            """
+            
+            n_inf = self.constants["Forouhi-Bloomer"]["n_inf"]
+            Eg = self.constants["Forouhi-Bloomer"]["Eg"]
+            A = self.constants["Forouhi-Bloomer"]["A"]
+            B = self.constants["Forouhi-Bloomer"]["B"]
+            C = self.constants["Forouhi-Bloomer"]["C"]
+            
+            # READ the input data
+            typ = type(x)
+
+            if typ == pd.DataFrame:
+                x = x.iloc[:,0]
+            elif typ == np.ndarray:
+                x = pd.DataFrame(x).iloc[:,0]
+            elif typ == list:
+                x = pd.Series(x, name="Wavelength")
+            elif ((typ == int)|(typ == float)):
+                x = pd.DataFrame(x, columns="Wavelength")
+                
+            # Transform wavelengths into energies.
+            # WARNING! Assumption is made that wavelength is in um - scaling factor of 1e6
+            En = 1e6 * h*c*Jev / x
+
+            # Initiate Forouhi-Bloomer complex constants
+            Q = 0.5 * (4*C - B**2)**0.5
+            B_0 = (A / Q) * (-0.5*B**2 + Eg*B - Eg**2 + C)
+            C_0 = (A / Q) * (0.5*B * (Eg**2 + C) - 2*Eg*C)
+
+
+            FH_n = n_inf + (B_0*En + C_0) / (En**2 - B*En - C)
+            FH_k = (A * (En - Eg)**2) / (En**2 - B*En + C)
+
+            return pd.concat([x, FH_n, FH_k], axis=1, keys=["Wavelength", "n", "k"])
+        
+        else:
+            raise Exception("Invalid model. Expected 'Sellmeier' or 'Forouhi-Bloomer'." )
+    
+    def fit_data(self, model: str = "Sellmeier"):
+        """
+        Fit source data according to the specified model.
+        
+        Parameters:
+        -----------
+        
+        model: str = "Sellmeier"
+            Model to be used t=for fitting n, k source data. Accepts two values: "Sellmeier or "Forouhi-Bloomer".
+            Defaults to 3rd order Sellmeier for n and k.
+            
+        Returns:
+        -----------
+        
+        Fitting constants for the specified model:
+            Sellmeier:
+                B_i, C_i   1=(1...3) - refractive index
+                b_i        i=(1...3) - extinction coefficient
+            
+            Forouhi-Bloomer:
+                n_inf     -   refractive index at infinite energy
+                Eg        -   energy band gap of the glass
+                A, B, C   -   band structure dependent constants
+        """
+        
+        dane = self.data
+        
+        if model == "Sellmeier":
+        
+            # Here define the Sellmeier_n function
+            def Sellmeier_n(x, B1, C1, B2, C2, B3, C3):
+                """
+                A 3rd order Sellmeier function.
+
+                Parameters:
+                    x: int, float, np.array, pd.Series
+                    B,C = constants of the Sellmeier equation for real part of the refractive index
+
+                Returns:
+                The output of the 3rd order Sellmeier function:
+                        - a pd.DataFrame
+
+                """
+
+                Sellm_n = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
+
+                return Sellm_n
+
+
+            # Preprocess the data
+            Sellm_fit = pd.concat([dane.iloc[:,0], dane.iloc[:,1] ** 2, dane.iloc[:,2]], axis = 1,
+                                  keys = [dane.columns[0], "n squared", "k"])
+
+            # Run optimization on the glass data
+            """
+            The optimizing parameters are based on Sellmeier constants for existing glasses.
+            p0 initializing values are set on the order of the constants for fused silica.
+            """
+
+            xdata = Sellm_fit.iloc[:,0]
+            ydata_n = Sellm_fit["n squared"]
+            ydata_k = Sellm_fit["k"]
+
+            popt_n, pcov_n = optimize.curve_fit(Sellmeier_n, xdata, ydata_n,
+                                                bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
+                                                p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
+
+
+            # fill the fitted constants (popt) to the table of constants
+            self.constants["Sellmeier"]["B1"] = popt_n[0]
+            self.constants["Sellmeier"]["C1"] = popt_n[1]
+            self.constants["Sellmeier"]["B2"] = popt_n[2]
+            self.constants["Sellmeier"]["C2"] = popt_n[3]
+            self.constants["Sellmeier"]["B3"] = popt_n[4]
+            self.constants["Sellmeier"]["C3"] = popt_n[5]
+
+            def Sellmeier_k(x, b1, b2, b3, B1 = popt_n[0], C1 = popt_n[1], B2 = popt_n[2], C2 = popt_n[3],
+                            B3 = popt_n[4], C3 = popt_n[5]):
+
+                """
+                Fits the 3rd order Sellmeier formula for the extinction part of the refractive index.
+                """
+
+                n = (1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3))**0.5
+                Sellm_k = (n*((b1*x)+(b2/x)+(b3/(x**3))))**(-1)
+
+                return Sellm_k
+
+            _Sellmeier_k = lambda x, b1, b2, b3: Sellmeier_k(x, b1, b2, b3)
+
+            popt_k, pcov_k = optimize.curve_fit(_Sellmeier_k ,xdata, ydata_k, p0 = [0.5, 0.5, 0.5])
+
+            # fill the fitted constants (popt) to the table of constants
+            self.constants["Sellmeier"]["b1"] = popt_k[0]
+            self.constants["Sellmeier"]["b2"] = popt_k[1]
+            self.constants["Sellmeier"]["b3"] = popt_k[2]
+
+            return self.constants["Sellmeier"]
+        
+        elif model == "Forouhi-Bloomer":
+            
+            # Define Forouhi-Bloomer formula for modelling k
+            def FH_k(x, Eg, A, B, C):
+
+                k = (A * (x - Eg)**2) / (x**2 - B*x + C)
+
+                return k
+
+            #Preprocess the fitting data
+            xfit = dane["Wavelength, eV"]
+            yfit_k = dane["k"]
+            yfit_n = dane["n"]
+
+            # Optimize the fitting parameters
+            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, xfit, yfit_k)
+
+            Eg = FH_k_parameters[0]
+            A = FH_k_parameters[1]
+            B = FH_k_parameters[2]
+            C = FH_k_parameters[3]
+
+            self.constants["Forouhi-Bloomer"]["Eg"] = Eg
+            self.constants["Forouhi-Bloomer"]["A"] = A
+            self.constants["Forouhi-Bloomer"]["B"] = B
+            self.constants["Forouhi-Bloomer"]["C"] = C
+
+            # Define the Forouhi-Bloomer formula for modelling n
+            def FH_n(x, n_inf, Eg = Eg, A = A, B = B, C = C):
+
+                Q = 0.5 * (4*C - B**2)**0.5
+                B_0 = (A / Q) * (-0.5*B**2 + Eg*B - Eg**2 + C)
+                C_0 = (A / Q) * (0.5*B * (Eg**2 + C) - 2*Eg*C)
+
+
+                n = n_inf + (B_0*x + C_0) / (x**2 - B*x - C)
+
+                return n
+
+            # Optimize the fitting parameters
+            FH_n_parameters, FHn_cov = optimize.curve_fit(lambda x, n_inf: FH_n(x, n_inf, Eg = Eg, A = A, B = B, C = C),
+                                                          xfit, yfit_n)
+
+            self.constants["Forouhi-Bloomer"]["n_inf"] = FH_n_parameters[0]
+            
+            return self.constants["Forouhi-Bloomer"]
+        
+        else:
+            raise Exception("Invalid fitting model. Must be 'Sellmeier' or 'Forouhi-Bloomer'.")
+    
+    def plot_fit(self, model: str="Sellmeier"):
+        
+        """
+        Plots the fitting results with experimental data as points and fitted model as a solid line.
+        
+        Parameters:
+        -----------
+        
+        model: str="Sellmeier"
+            Model to be used for fitting and plotted.
+            Accepted values: "Sellmeier", "Forouhi-Bloomer"
+            Defaults to "Sellmeier".
+            
+        Returns:
+        -----------
+        
+        A plot with fitted model and the experimental data, where:
+        ___   fitted model
+        -o-   experimental data
+        
+        """
+        
+        plt.figure(figsize = (12,7))
+        
+        x_min = self.data.iloc[0,0]
+        x_max = self.data.iloc[-1,0]
+        ymin_k = self.data["k"].min() * 1.1
+        ymax_k = self.data["k"].max() * 1.1
+        x = np.linspace(x_min, x_max, 1000)
+        fit = self.model(x, model=model)
+        
+        # plot refractive index
+        plt.subplot(1,2,1)
+        experimental_n = plt.scatter(self.data["Wavelength"], self.data["n"], alpha=0.5, s=20)
+        plt.title("{} fit for refractive index".format(model), size=13)
+        plt.plot(fit["Wavelength"], fit["n"], c="black")
+        plt.xlabel("Wavelength", size=19)
+        plt.ylabel("Refractive index, a.u.", size=19)
+        plt.xticks(size=13)
+        plt.yticks(size=13)
+        
+        # plot the extinction coefficient
+        plt.subplot(1,2,2)
+        
+        experimental_k = plt.scatter (self.data["Wavelength"], self.data["k"], alpha=0.5, s=20)
+        plt.title("{} fit for extinction coefficient".format(model), size=13)
+        plt.plot(fit["Wavelength"], fit["k"], c="black")
+        plt.ylim(ymin_k, ymax_k)
+        plt.xlabel("Wavelength", size=19)
+        plt.ylabel("Extinction coefficient, a.u.", size=19)
+        plt.xticks(size=13)
+        plt.yticks(size=13)
+        plt.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
+        
+        plt.tight_layout()
