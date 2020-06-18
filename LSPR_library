@@ -267,37 +267,9 @@ class SpectralMeasurement:
         
         # Absorbance
         
-        # Define f_abs function
+        # Define f_sca function
         pi = np.pi       
         
-        def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
-
-            """
-            A function determining the position and shape of the absorption cross section.
-
-            Parameters:
-                eps_m:
-                    Real permittivity of the matrix. [a.u]
-                e_1:
-                    Real permittivity of the material of the nanoparticles. [a.u.]
-                e_2:
-                    Imaginary permittivity of the material of the nanoparticles. [a.u.]
-                l_0:
-                    Wavelength. [µm]
-                C_tot:
-                    Total concentration of nanoparticles. [1/cm3]
-                t:
-                    Sample thickness. [µm]
-
-            """
-
-            c_abs = ((0.8686 * (pi ** 5)) * 1e-30) / 3
-            L_abs = c_abs * C_tot * t * (((eps_m ** 2) / (l_0 ** 4)) * (((e_1 - eps_m) ** 2) + (e_2 ** 2)))
-            M_abs = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
-            f_abs = L_abs / M_abs
-            return f_abs
-
-        # Define f_sca function
         def f_sca(eps_m, e_1, e_2, l_0, C_tot, t):
 
             """
@@ -316,13 +288,41 @@ class SpectralMeasurement:
                     Total concentration of nanoparticles. [1/cm3]
                 t:
                     Sample thickness. [µm]
+
             """
 
-            c_sca = 1.3029 * (pi ** 2) * 1e-21
-            L_sca = c_sca * C_tot * t * (((eps_m ** 1.5) / l_0) * e_2)
+            c_sca = ((0.8686 * (pi ** 5)) * 1e-30) / 3
+            L_sca = c_sca * C_tot * t * (((eps_m ** 2) / (l_0 ** 4)) * (((e_1 - eps_m) ** 2) + (e_2 ** 2)))
             M_sca = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
             f_sca = L_sca / M_sca
             return f_sca
+
+        # Define f_abs function
+        def f_abs(eps_m, e_1, e_2, l_0, C_tot, t):
+
+            """
+            A function determining the position and shape of the absorption cross section.
+
+            Parameters:
+                eps_m:
+                    Real permittivity of the matrix. [a.u]
+                e_1:
+                    Real permittivity of the material of the nanoparticles. [a.u.]
+                e_2:
+                    Imaginary permittivity of the material of the nanoparticles. [a.u.]
+                l_0:
+                    Wavelength. [µm]
+                C_tot:
+                    Total concentration of nanoparticles. [1/cm3]
+                t:
+                    Sample thickness. [µm]
+            """
+
+            c_abs = 1.3029 * (pi ** 2) * 1e-21
+            L_abs = c_abs * C_tot * t * (((eps_m ** 1.5) / l_0) * e_2)
+            M_abs = (((e_1 + 2*eps_m) ** 2) + (e_2 ** 2))
+            f_abs = L_abs / M_abs
+            return f_abs
 
         # Define integrals 1 and 2 - I_1
         def I_1(d, n, mean, sd):
@@ -356,7 +356,7 @@ class SpectralMeasurement:
         l_0 = self.matrix_refractive_index.iloc[:,0]
         e_1 = self.nanoparticle_permittivity.iloc[:,1]
         e_2 = self.nanoparticle_permittivity.iloc[:,2]
-        d = np.linspace(0,100,100)
+        d = np.linspace(0,100,100000)
         C_tot = self.nanoparticle_concentration
         mean = self.nanoparticle_size
         sd = self.nanoparticle_stdev
@@ -380,6 +380,13 @@ class SpectralMeasurement:
                                keys=[self.matrix_refractive_index.columns[0], "f_abs"])
         self.f_sca = pd.concat([l_0, f_sca(eps_m, e_1, e_2, l_0, C_tot, t)], axis=1,
                                keys=[self.matrix_refractive_index.columns[0], "f_sca"])
+        
+        sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd) / (0.4343 * C_tot * t)
+        sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) / (0.4343 * C_tot * t)
+        self.cross_sections["scattering"] = pd.concat([l_0, sigma_sca], axis=1,
+                               keys=[self.matrix_refractive_index.columns[0], "Cross section for scattering, 1/cm2"])
+        self.cross_sections["absorption"] = pd.concat([l_0, sigma_abs], axis=1,
+                               keys=[self.matrix_refractive_index.columns[0], "Cross section for absorption, 1/cm2"])
         
         
     def T(self, R_corr: bool=True):
