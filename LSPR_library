@@ -250,7 +250,7 @@ class SpectralMeasurement:
         self.nanoparticle_stdev = nanoparticle.stdev
         self.f_abs = None
         self.f_sca = None
-        self.cross_sections = {"absorption": None, "scattering": None}
+        self.cross_sections = None
         
         # Reflectance
         L = 1 - self.matrix_refractive_index['n']
@@ -263,7 +263,7 @@ class SpectralMeasurement:
         
         set_difference = matrix.permittivity.iloc[:,0] - nanoparticle.material.permittivity.iloc[:,0]
         if set_difference.any() != 0:
-            raise Exception("The Matrix and Nanoparticle wavelengths are different. Align the data with 'align_datasets', 'regular_xspacing' or other tool to avoid incorrect results.")
+            print("The Matrix and Nanoparticle wavelengths are different, which may result in errors. Align the data with 'align_datasets', 'regular_xspacing' or other tool to avoid incorrect results.")
         
         # Absorbance
         
@@ -380,11 +380,9 @@ class SpectralMeasurement:
         
         sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(6, mean, sd) / (0.4343 * C_tot * t)
         sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(3, mean, sd) / (0.4343 * C_tot * t)
-        self.cross_sections["scattering"] = pd.concat([l_0, sigma_sca], axis=1,
-                               keys=[self.matrix_refractive_index.columns[0], "Cross section for scattering, 1/cm2"])
-        self.cross_sections["absorption"] = pd.concat([l_0, sigma_abs], axis=1,
-                               keys=[self.matrix_refractive_index.columns[0], "Cross section for absorption, 1/cm2"])
-        
+        self.cross_sections = pd.concat([l_0, sigma_abs, sigma_sca], axis=1,
+                               keys=[self.matrix_refractive_index.columns[0], "Cross section for absorption, 1/cm2",
+                                     "Cross section for scattering, 1/cm2"])        
         
     def T(self, R_corr: bool=True):
         
@@ -407,10 +405,10 @@ class SpectralMeasurement:
         
         if R_corr == True:
             # evaluate corrected transmittance
-            transmittance = (1 - 0.01*self.mreflectance.iloc[:,1]) * np.exp(-(Abs))
+            transmittance = (1 - 0.01*self.mreflectance.iloc[:,1]) * 10**(-Abs)
         else:
             # evaluate without correction
-            transmittance = np.exp(-(Abs))
+            transmittance = 10**(-(Abs))
             
         transmittance = 100*transmittance
         transmittance = pd.concat([self.matrix_refractive_index.iloc[:,0], transmittance], axis=1,
@@ -418,15 +416,94 @@ class SpectralMeasurement:
         
         return transmittance
     
-    def plot(feature: str = "T", low: float = None, high: float = None):
+    def plot_results(self, feature: str = "T", low: float = None, high: float = None):
         """
         Plots the specified feature with respect to the wavelength.
         """
-        
         # Transmittance
-        if feature == "T":
-            data = self.T
-            plot = plt.plot(data)
+        if feature == "cross_section":
+            dane = self.cross_sections
+            title = "Cross sections for absorption/scattering"
+            xlabel = dane.columns[0]
+            ylabel_1 = dane.columns[1]
+            ylabel_2 = dane.columns[2]
+            x_data = dane.iloc[:,0]
+            y_1 = dane.iloc[:,1]
+            y_2 = dane.iloc[:,2]
+            
+            lower_xlimit = dane.iloc[0,0]
+            higher_xlimit = dane.iloc[-1,0]
+            if low != None:
+                lower_xlimit = low
+            if high != None:
+                higher_xlimit = high
+            
+            fig, ax1 = plt.subplots()
+            color_1 = "red"
+            ax1.plot(x_data, y_1, color=color_1)
+            ax1.set_title(title)
+            ax1.set_ylabel(ylabel_1, color=color_1)
+            ax1.set_xlabel(xlabel)
+            ax1.set_xlim(lower_xlimit,higher_xlimit)
+            ax1.tick_params(axis='y', labelcolor=color_1)
+            
+            ax2 = ax1.twinx()
+            color_2 = "blue"
+            ax2.plot(x_data, y_2, color=color_2)
+            ax2.set_ylabel(ylabel_2, color=color_2)
+            ax2.tick_params(axis='y', labelcolor=color_2)
+            
+            fig.tight_layout()
+        else:
+            if feature == "T":
+                dane = self.Abs
+                title = "Transmittance without reflectance correction"
+                xlabel = dane.columns[0]
+                ylabel = "Transmittance, %"
+                x_data = dane.iloc[:,0]
+                y_data = 100 * 10**(-dane.iloc[:,1])
+
+            elif feature == "T_corr":
+                dane = self.Abs
+                title = "Transmittance with reflectance correction"
+                xlabel = dane.columns[0]
+                ylabel = "Transmittance, %"
+                x_data = dane.iloc[:,0]
+                y_data = 100 * (1 - 0.01*self.mreflectance.iloc[:,1]) * 10**(-dane.iloc[:,1])
+
+            elif feature == "Abs":
+                dane = self.Abs
+                title = "Absorbance"
+                xlabel = dane.columns[0]
+                ylabel = "Absorbance, a.u."
+                x_data = dane.iloc[:,0]
+                y_data = dane.iloc[:,1]
+
+            elif feature == "R":
+                dane = self.mreflectance
+                title = "Reflectance"
+                xlabel = dane.columns[0]
+                ylabel = "Reflectance, %"
+                x_data = dane.iloc[:,0]
+                y_data = dane.iloc[:,1]
+
+
+            lower_xlimit = dane.iloc[0,0]
+            higher_xlimit = dane.iloc[-1,0]
+            if low != None:
+                lower_xlimit = low
+            if high != None:
+                higher_xlimit = high
+
+            plt.subplots()
+
+            color = "red"
+            plt.plot(x_data, y_data, color=color)
+            plt.title(title)
+            plt.ylabel(ylabel)
+            plt.xlabel(xlabel)
+            plt.xlim(lower_xlimit,higher_xlimit)
+
         
     
     def align_datasets(self):
@@ -447,20 +524,29 @@ class SpectralMeasurement:
         # interpolate data based on new x subset
         interpolated_matrix_RI = pd.merge(aligned_x_subset, self.matrix.refractive_index,
                                           how="outer").interpolate()
-        interpolated_matrix_real_permittivity = pd.merge(aligned_x_subset, self.matrix.permittivity,
-                                                         how="outer").interpolate().iloc[:,1]
-        interpolated_nanoparticle_permittivity = pd.merge(aligned_x_subset,
-                                                          self.nanoparticle.material.permittivity,
-                                                          how="outer").interpolate()
+
+        interpolated_nanomaterial_RI = pd.merge(aligned_x_subset,
+                                                self.nanoparticle.material.refractive_index,
+                                                how="outer").interpolate()
+
+        # Generate interpolated matrix and nanoparticle instances
+        nano_name = self.nanoparticle.name
+        nano_conc = self.nanoparticle.concentration
+        nano_size = self.nanoparticle.size
+        nano_stdev = self.nanoparticle.stdev
+        inter_mat_name = "Interpolated" + self.matrix.name
+        inter_nanomat_name = "Interpolated" + self.nanoparticle.material.name
+        inter_nanopart_name = "Interpolated" + nano_name
+        
+        interpolated_matrix = OpticalMaterial(inter_mat_name, interpolated_matrix_RI)
+        interpolated_nano_material = OpticalMaterial(inter_nanomat_name, interpolated_nanomaterial_RI)
+        interpolated_nanoparticle = Nanoparticle(inter_nanopart_name, interpolated_nano_material,
+                                                 size = nano_size, stdev = nano_stdev,
+                                                 concentration = nano_conc)
         
         # initialize a copy SpectralMeasurement
-        aligned_measurement = SpectralMeasurement("Aligned data measurement", matrix=self.matrix,
-                                                  nanoparticle=self.nanoparticle)
-        
-        # insert the interpolated input
-        aligned_measurement.matrix_refractive_index = interpolated_matrix_RI
-        aligned_measurement.matrix_real_permittivity = interpolated_matrix_real_permittivity
-        aligned_measurement.nanoparticle_permittivity = interpolated_nanoparticle_permittivity
+        aligned_measurement = SpectralMeasurement("Aligned data measurement", matrix=interpolated_matrix,
+                                                  nanoparticle=interpolated_nanoparticle)
         
         return aligned_measurement
 
