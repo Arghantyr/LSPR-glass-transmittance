@@ -325,15 +325,13 @@ class SpectralMeasurement:
             return f_abs
 
         # Define integrals 1 and 2 - I_1
-        def I_1(d, n, mean, sd):
+        def I_1(n, mean, sd):
 
             """
             Integrated n-th order power of the normally distributed diameter as part
             of the absorption and scattering cross sections of the Mie dipol approximation.
 
             Parameters:
-                d:
-                    diameter of the nanoparticles
                 n:
                     order of the exponentiation
                 mean:
@@ -346,9 +344,9 @@ class SpectralMeasurement:
                     normal distribution N(mean, sd)   X   d**n
             """
 
-            def integrand(d,n,mean,sd):
-                return (d**n)*stats.norm.pdf(d, loc=mean, scale=sd)
-            return integrate.simps(integrand(d,n,mean,sd))
+            integrand_1 = lambda x: (x**n)*stats.norm.pdf(x, loc=mean, scale=sd)
+            integrand_2 = lambda x: stats.norm.pdf(x, loc=mean, scale=sd)
+            return integrate.quad(integrand_1, 0, np.inf)[0] / integrate.quad(integrand_2, 0, np.inf)[0]
         
         n_glass = self.matrix_refractive_index['n']
         k_glass = self.matrix_refractive_index['k']
@@ -356,7 +354,6 @@ class SpectralMeasurement:
         l_0 = self.matrix_refractive_index.iloc[:,0]
         e_1 = self.nanoparticle_permittivity.iloc[:,1]
         e_2 = self.nanoparticle_permittivity.iloc[:,2]
-        d = np.linspace(0,100,100000)
         C_tot = self.nanoparticle_concentration
         mean = self.nanoparticle_size
         sd = self.nanoparticle_stdev
@@ -370,7 +367,7 @@ class SpectralMeasurement:
         A_matrix = 5.4576 * (L1 / l_0)
 
         # A_nano - inner function
-        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd) + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd)
+        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(3, mean, sd) + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(6, mean, sd)
 
         A_comp = A_matrix + A_nano
 
@@ -381,8 +378,8 @@ class SpectralMeasurement:
         self.f_sca = pd.concat([l_0, f_sca(eps_m, e_1, e_2, l_0, C_tot, t)], axis=1,
                                keys=[self.matrix_refractive_index.columns[0], "f_sca"])
         
-        sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) / (0.4343 * C_tot * t)
-        sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd) / (0.4343 * C_tot * t)
+        sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(6, mean, sd) / (0.4343 * C_tot * t)
+        sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(3, mean, sd) / (0.4343 * C_tot * t)
         self.cross_sections["scattering"] = pd.concat([l_0, sigma_sca], axis=1,
                                keys=[self.matrix_refractive_index.columns[0], "Cross section for scattering, 1/cm2"])
         self.cross_sections["absorption"] = pd.concat([l_0, sigma_abs], axis=1,
