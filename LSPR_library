@@ -370,7 +370,7 @@ class SpectralMeasurement:
         A_matrix = 5.4576 * (L1 / l_0)
 
         # A_nano - inner function
-        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd)
+        A_nano = f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd) + f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd)
 
         A_comp = A_matrix + A_nano
 
@@ -381,8 +381,8 @@ class SpectralMeasurement:
         self.f_sca = pd.concat([l_0, f_sca(eps_m, e_1, e_2, l_0, C_tot, t)], axis=1,
                                keys=[self.matrix_refractive_index.columns[0], "f_sca"])
         
-        sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd) / (0.4343 * C_tot * t)
-        sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) / (0.4343 * C_tot * t)
+        sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 6, mean, sd) / (0.4343 * C_tot * t)
+        sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(d, 3, mean, sd) / (0.4343 * C_tot * t)
         self.cross_sections["scattering"] = pd.concat([l_0, sigma_sca], axis=1,
                                keys=[self.matrix_refractive_index.columns[0], "Cross section for scattering, 1/cm2"])
         self.cross_sections["absorption"] = pd.concat([l_0, sigma_abs], axis=1,
