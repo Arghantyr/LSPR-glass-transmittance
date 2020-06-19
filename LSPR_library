@@ -749,8 +749,8 @@ class Sellmeier:
         dane = self.data
         
         # Preprocess the data
-        dane_n = dane.drop(columns="k").dropna()
-        dane_k = dane.drop(columns="n").dropna()
+        dane_n = dane.drop(columns="k").dropna().reset_index(drop=True)
+        dane_k = dane.drop(columns="n").dropna().reset_index(drop=True)
         
         if model == "Sellmeier":
         
@@ -825,7 +825,7 @@ class Sellmeier:
                 return k
             
             # Optimize the fitting parameters
-            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, dane_k.iloc[:,3], dane_k.iloc[:,2])
+            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, dane_k.iloc[:,2], dane_k.iloc[:,1])
 
             Eg = FH_k_parameters[0]
             A = FH_k_parameters[1]
@@ -851,7 +851,7 @@ class Sellmeier:
 
             # Optimize the fitting parameters
             FH_n_parameters, FHn_cov = optimize.curve_fit(lambda x, n_inf: FH_n(x, n_inf, Eg = Eg, A = A, B = B, C = C),
-                                                          dane_n.iloc[:,3], dane_n.iloc[:,1])
+                                                          dane_n.iloc[:,2], dane_n.iloc[:,1])
 
             self.constants["Forouhi-Bloomer"]["n_inf"] = FH_n_parameters[0]
             
