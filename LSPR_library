@@ -263,7 +263,7 @@ class SpectralMeasurement:
         
         set_difference = matrix.permittivity.iloc[:,0] - nanoparticle.material.permittivity.iloc[:,0]
         if set_difference.any() != 0:
-            print("The Matrix and Nanoparticle wavelengths are different, which may result in errors. Align the data with 'align_datasets', 'regular_xspacing' or other tool to avoid incorrect results.")
+            print("The Matrix and Nanoparticle wavelengths are different, which may result in errors. Align the data with 'align_datasets', 'even_xspacing' or other tool to avoid incorrect results.")
         
         # Absorbance
         
@@ -748,6 +748,10 @@ class Sellmeier:
         
         dane = self.data
         
+        # Preprocess the data
+        dane_n = dane.drop(columns="k").dropna()
+        dane_k = dane.drop(columns="n").dropna()
+        
         if model == "Sellmeier":
         
             # Here define the Sellmeier_n function
@@ -768,23 +772,14 @@ class Sellmeier:
                 Sellm_n = 1 + (B1 * x**2)/(x**2 - C1) + (B2 * x**2)/(x**2 - C2) + (B3 * x**2)/(x**2 - C3)
 
                 return Sellm_n
-
-
-            # Preprocess the data
-            Sellm_fit = pd.concat([dane.iloc[:,0], dane.iloc[:,1] ** 2, dane.iloc[:,2]], axis = 1,
-                                  keys = [dane.columns[0], "n squared", "k"])
-
+        
             # Run optimization on the glass data
             """
             The optimizing parameters are based on Sellmeier constants for existing glasses.
             p0 initializing values are set on the order of the constants for fused silica.
             """
 
-            xdata = Sellm_fit.iloc[:,0]
-            ydata_n = Sellm_fit["n squared"]
-            ydata_k = Sellm_fit["k"]
-
-            popt_n, pcov_n = optimize.curve_fit(Sellmeier_n, xdata, ydata_n,
+            popt_n, pcov_n = optimize.curve_fit(Sellmeier_n, dane_n.iloc[:,0], dane_n.iloc[:,1]**2,
                                                 bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
                                                 p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
 
@@ -811,7 +806,7 @@ class Sellmeier:
 
             _Sellmeier_k = lambda x, b1, b2, b3: Sellmeier_k(x, b1, b2, b3)
 
-            popt_k, pcov_k = optimize.curve_fit(_Sellmeier_k ,xdata, ydata_k, p0 = [0.5, 0.5, 0.5])
+            popt_k, pcov_k = optimize.curve_fit(_Sellmeier_k ,dane_k.iloc[:,0], dane_k.iloc[:,1], p0 = [0.5, 0.5, 0.5])
 
             # fill the fitted constants (popt) to the table of constants
             self.constants["Sellmeier"]["b1"] = popt_k[0]
@@ -828,14 +823,9 @@ class Sellmeier:
                 k = (A * (x - Eg)**2) / (x**2 - B*x + C)
 
                 return k
-
-            #Preprocess the fitting data
-            xfit = dane["Wavelength, eV"]
-            yfit_k = dane["k"]
-            yfit_n = dane["n"]
-
+            
             # Optimize the fitting parameters
-            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, xfit, yfit_k)
+            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, dane_k.iloc[:,3], dane_k.iloc[:,2])
 
             Eg = FH_k_parameters[0]
             A = FH_k_parameters[1]
@@ -861,7 +851,7 @@ class Sellmeier:
 
             # Optimize the fitting parameters
             FH_n_parameters, FHn_cov = optimize.curve_fit(lambda x, n_inf: FH_n(x, n_inf, Eg = Eg, A = A, B = B, C = C),
-                                                          xfit, yfit_n)
+                                                          dane_n.iloc[:,3], dane_n.iloc[:,1])
 
             self.constants["Forouhi-Bloomer"]["n_inf"] = FH_n_parameters[0]
             
