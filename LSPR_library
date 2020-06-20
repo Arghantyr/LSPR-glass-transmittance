@@ -21,41 +21,6 @@ class OpticalMaterial:
     
     Takes a tabular source file (.csv or pd.DataFrame) of form: Wavelength, n, k.
     Stores the refractive index and electric permittivity.
-    
-    Available methods:
-    -------------------
-    
-        regular_xspacing(low_bound, up_bound, spacing):
-        
-            Transforms the data to regularly spaced dataset with lower bound = low_bound,
-            upper bound = up_bound and a given spacing
-            
-            Example:
-            --------
-            
-            material = OpticalMaterial("Material_X", old_dataset)
-            RI = material.refractive_index
-            RI
-            
-            Wavelength |    n     |    k     |
-            -----------|----------|----------|
-            0.280      |  2.4440  |  0.0030  |
-            0.403      |  2.3410  |  0.0030  |
-            0.427      |  2.3320  |  0.0020  |
-            0.675      |  2.2830  |  0.0010  |
-            0.816      |  2.2720  |  0.0010  |
-            
-            
-            material.regular_xspacing(RI, 0.280, 0.821, 0.135)
-
-            Wavelength |    n     |    k     |
-            -----------|----------|----------|
-            0.280      |  2.4440  |  0.0030  |
-            0.415      |  2.3365  |  0.0025  |
-            0.550      |  2.3075  |  0.0015  |
-            0.685      |  2.2775  |  0.0010  |
-            0.820      |  2.2720  |  0.0010  |
-            
     """
     
     def __init__(self, name, source):
@@ -84,6 +49,7 @@ class OpticalMaterial:
         if type(source) == str:
             if source[-4:] == '.csv':
                 self.refractive_index = pd.read_csv(source)
+                self.refractive_index.columns = ["Wavelength", "n", "k"]
             else:
                 raise Exception("Invalid sourcefile. Only '.csv' or 'pd.DataFrame' type accepted.")
         elif type(source) == pd.DataFrame:
