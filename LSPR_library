@@ -168,7 +168,7 @@ class OpticalMaterial:
         return regspace
             
     def __repr__(self):
-        return "{} material".format(self.name)
+        return "{}".format(self.name)
         
         
 
@@ -825,7 +825,9 @@ class Sellmeier:
                 return k
             
             # Optimize the fitting parameters
-            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, dane_k.iloc[:,2], dane_k.iloc[:,1])
+            FH_k_parameters, FHk_cov = optimize.curve_fit(FH_k, dane_k.iloc[:,2], dane_k.iloc[:,1],
+                                                          bounds=(0,[10, 2, 75, 300]),
+                                                          p0=[2.5, 0.02, 10, 25])
 
             Eg = FH_k_parameters[0]
             A = FH_k_parameters[1]
