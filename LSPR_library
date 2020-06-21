@@ -171,23 +171,23 @@ class Nanoparticle:
         self.stdev = stdev
         self.concentration = concentration
         
-    def modify(self, feature, new):
+    def modify(self, feature: str, new):
 
-        if feature == self.material:
+        if feature == "material":
             self.material = new
-        elif feature == self.size:
+        elif feature == "size":
             self.size = new
-        elif feature == self.concentration:
+        elif feature == "concentration":
             self.concentration = new
-        elif feature == self.stdev:
+        elif feature == "stdev":
             self.stdev = new
-        elif feature == self.name:
+        elif feature == "name":
             self.name = new
         else:
             raise AttributeError("Invalid attribute in Nanoparticle class.")
         
     def __repr__(self):
-        return "{} nanoparticle with size {}±{} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
+        return "{} nanoparticles with size {}±{} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
             self.material, self.size, self.stdev, self.concentration)
 
 
@@ -347,8 +347,8 @@ class SpectralMeasurement:
         sigma_sca = 1e4 * f_sca(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(6, mean, sd) / (0.4343 * C_tot * t)
         sigma_abs = 1e4 * f_abs(eps_m, e_1, e_2, l_0, C_tot, t) * I_1(3, mean, sd) / (0.4343 * C_tot * t)
         self.cross_sections = pd.concat([l_0, sigma_abs, sigma_sca], axis=1,
-                               keys=[self.matrix_refractive_index.columns[0], "Cross section for absorption, 1/cm2",
-                                     "Cross section for scattering, 1/cm2"])        
+                               keys=[self.matrix_refractive_index.columns[0], "Cross section for absorption, cm2",
+                                     "Cross section for scattering, cm2"])        
         
     def T(self, R_corr: bool=True):
         
@@ -391,8 +391,8 @@ class SpectralMeasurement:
         
         if feature == "cross_sections":
             dane = self.cross_sections
-            title = "Cross sections for absorption/scattering"
             xlabel = dane.columns[0]
+            title = "Cross-sections for absorption and scattering"
             ylabel_1 = dane.columns[1]
             ylabel_2 = dane.columns[2]
             x_data = dane.iloc[:,0]
@@ -406,22 +406,33 @@ class SpectralMeasurement:
             if high != None:
                 higher_xlimit = high
             
-            fig, ax1 = plt.subplots()
             color_1 = "red"
-            ax1.plot(x_data, y_1, color=color_1)
-            ax1.set_title(title)
-            ax1.set_ylabel(ylabel_1, color=color_1)
-            ax1.set_xlabel(xlabel)
-            ax1.set_xlim(lower_xlimit,higher_xlimit)
-            ax1.tick_params(axis='y', labelcolor=color_1)
-            
-            ax2 = ax1.twinx()
             color_2 = "blue"
-            ax2.plot(x_data, y_2, color=color_2)
-            ax2.set_ylabel(ylabel_2, color=color_2)
-            ax2.tick_params(axis='y', labelcolor=color_2)
             
-            fig.tight_layout()
+            fig = plt.figure(figsize=(10,5.625))
+            
+            plt.subplot(1,2,1)
+            plt.plot(x_data, y_1, color=color_1)
+            st = plt.suptitle(title, size=19)
+            plt.ylabel(ylabel_1, color=color_1, size=19)
+            plt.xlabel(xlabel, size=19)
+            plt.yticks(size=13)
+            plt.xticks(size=13)
+            plt.xlim(lower_xlimit,higher_xlimit)
+            plt.tick_params(axis='y', labelcolor=color_1)
+            
+            plt.subplot(1,2,2)
+            plt.plot(x_data, y_2, color=color_2)
+            plt.ylabel(ylabel_2, color=color_2, size=19)
+            plt.xlabel(xlabel, size=19)
+            plt.yticks(size=13)
+            plt.xticks(size=13)
+            plt.xlim(lower_xlimit,higher_xlimit)
+            plt.tick_params(axis='y', labelcolor=color_2)
+            
+            plt.tight_layout()
+            st.set_y(0.95)
+            fig.subplots_adjust(top = 0.85)
         else:
             if feature == "T":
                 dane = self.Abs
@@ -463,15 +474,21 @@ class SpectralMeasurement:
             if high != None:
                 higher_xlimit = high
 
-            plt.subplots()
-
+            fig = plt.figure(figsize=(10,5.625))
+            
             color = "red"
             plt.plot(x_data, y_data, color=color)
-            plt.title(title)
-            plt.ylabel(ylabel)
-            plt.xlabel(xlabel)
+            st = plt.suptitle(title, size=19)
+            plt.ylabel(ylabel, color=color, size=19)
+            plt.xlabel(xlabel, size=19)
+            plt.yticks(size=13)
+            plt.xticks(size=13)
             plt.xlim(lower_xlimit,higher_xlimit)
-
+            plt.tick_params(axis='y', labelcolor=color)
+            
+            plt.tight_layout()
+            st.set_y(0.95)
+            fig.subplots_adjust(top = 0.85)
         
     
     def align_datasets(self):
@@ -562,7 +579,6 @@ class Sellmeier:
         """
         
         self.constants = {}
-        self.data = data
         
         # READ the input data
         typ = type(data)
