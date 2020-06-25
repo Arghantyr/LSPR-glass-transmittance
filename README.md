@@ -39,12 +39,12 @@ The transmittance of 31nm silver nanoparticles homogeneously distributed in vacu
 import lspr_library as lpl
 
 # Get the csv file with n,k values for silver in range 200-1000nm
-# spaced evenly every 5nm
-Ag = lpl.OpticalMaterial(name = "Silver",source = "n-k_Silver_200-1000nm_(5nm).csv")
+# spaced evenly every 1nm
+Ag = lpl.OpticalMaterial(name = "Silver",source = "n-k_Silver_200-1000nm_(1nm).csv")
 
 # Get n,k values for vacuum
 Vacuum = lpl.OpticalMaterial(name = "Vacuum",
-                         source = "n-k_data_for_vacuum_200-1000nm_(5nm).csv")
+                         source = "n-k_data_for_vacuum_200-1000nm_(1nm).csv")
 
 # Create Ag nanoparticles with mean size of 31nm, standard deviation of 1nm
 # and concentration of 5.8e13 cm^-3
@@ -55,10 +55,10 @@ nAg = lpl.Nanoparticle(name = "Silver nanoparticles", material=Ag,
 (silver nanoparticles dispersed in vacuum); use "T_corr" for reflectance corrected result
 Transmittance = lpl.SpectralMeasurement("Measure the transmittance",
                                     matrix=Vacuum, nanoparticle=nAg,
-                                    thickness=1).plot_results("T_corr")
+                                    thickness=3).plot_results("T_corr")
 ```
 
-![The result is a preformatted plot of the reflectance corrected transmittance](https://github.com/Arghantyr/LSPR-glass-transmittance/blob/master/nAg_in_space_200-1000nm.jpg)
+![The result is a preformatted plot of the reflectance corrected transmittance](https://github.com/Arghantyr/LSPR-glass-transmittance/blob/master/example.jpg)
 
 # License
 lspr_library is distributed under [MIT](https://choosealicense.com/licenses/mit/) license.
