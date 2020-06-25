@@ -3,6 +3,8 @@ class SpectralMeasurement:
     Basic spectral measurements: absorbance, transmittance
     """
 
+    # Get the important physical constants
+    pi = np.pi
 
     def __init__(self, name: str=None, matrix: OpticalMaterial=None, nanoparticle: Nanoparticle=None,
                  thickness: float=1):
