@@ -1,3 +1,6 @@
+import pandas as pd
+import numpy as np
+
 class OpticalMaterial:
     """
     A class for any material to be considered for its optical properties.
