@@ -33,7 +33,7 @@ pip install lspr_library
 # Usage
 
 More examples on how to use the lspr_library and specific methods can be found in the documentation.
-The transmittance of 31nm silver nanoparticles homogeneously distributed in vacuum with concentration 5.8 \cdot 10^13 cm^{-3}
+The transmittance of 31nm silver nanoparticles homogeneously distributed in vacuum with concentration 5.8 &middot; 10<sup>13</sup> cm<sup>-3</sup>
 
 ```
 import lspr_library as lpl
