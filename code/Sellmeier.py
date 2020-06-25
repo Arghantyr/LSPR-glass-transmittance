@@ -28,6 +28,11 @@ class Sellmeier:
             - Sellmeier constants for n: B_i, C_i (i=1...3) and for k: b_i (i=1...3)
             - Forouhi-Bloomer contants: n_inf, Eg, A, B, C
     """
+    
+    # Get the important physical constants
+    h = constants.physical_constants["Planck constant"][0]
+    c = constants.physical_constants["speed of light in vacuum"][0]
+    Jev = constants.physical_constants["joule-electron volt relationship"][0]
 
 
     def __init__(self, data):
