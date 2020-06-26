@@ -12,7 +12,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="lspr_library-Piast-Kolodziej",
+    name="lspr_library",
     version="0.20.6",
     author="Angantyr Krzysztof Orlinski",
     author_email="kakoori@gmail.com",
