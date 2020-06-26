@@ -1,10 +1,10 @@
-# What is LSPR-library?
+# What is lsprlib?
 
-_LSPR-library_ is a Python 3 scientific package for modelling UV-Vis spectral behaviour of metallic nanoparticle-dieletric composites.
+_lsprlib_ is a Python 3 scientific package for modelling UV-Vis spectral behaviour of metallic nanoparticle-dieletric composites.
 
 # Dependencies
 
-To run _LSPR-library_ smoothly you will need:
+To run _lsprlib_ smoothly you will need:
 1. Python 3.4+
 2. Pandas 1.0.3+
 3. NumPy 1.18.1+
@@ -12,9 +12,9 @@ To run _LSPR-library_ smoothly you will need:
 5. Statsmodels 0.11.0+
 6. Matplotlib 3.1.3+
 
-# What does LSPR-library enable?
+# What does lsprlib enable?
 
-_LSPR-library_ enables one to approximate some spectroscopic features of metallic nanoparticle-dielectric composites, e.g. transmittance, absorbance, scattering cross-section. The model utilizes dipole approximation of Mie solution to Maxwell equations, described in more detail in article by Olson et al.<sup>1</sup>
+_lsprlib_ enables one to approximate some spectroscopic features of metallic nanoparticle-dielectric composites, e.g. transmittance, absorbance, scattering cross-section. The model utilizes dipole approximation of Mie solution to Maxwell equations, described in more detail in article by Olson et al.<sup>1</sup>
 
 To perform a simulation, one needs to construct a composite, so matrix and metallic nanoparticles, so for each a set of refractive index and extinction coefficient data for simulated spectral range are necessary. The model **does not take into account possible interactions at the nanoparticle/matrix interface**, i.e. the composite absorbance is a simple sum of matrix and nanoparticle absorbances calculated for pristine materials.
 
@@ -24,10 +24,10 @@ To perform a simulation, one needs to construct a composite, so matrix and metal
 
 # How to get it running?
 
-To install lspr_library package use [pip](https://pip.pypa.io/en/stable/) package manager:
+To install lsprlib package use [pip](https://pip.pypa.io/en/stable/) package manager:
 
 ```
-pip install lspr_library
+pip install lsprlib
 ```
 
 # Usage
@@ -36,7 +36,7 @@ More examples on how to use the lspr_library and specific methods can be found i
 The transmittance of 31nm silver nanoparticles homogeneously distributed in vacuum with concentration 5.8 &middot; 10<sup>13</sup> cm<sup>-3</sup>
 
 ```
-import lspr_library as lpl
+import lsprlib as lpl
 
 # Get the csv file with n,k values for silver in range 200-1000nm
 # spaced evenly every 1nm
@@ -61,7 +61,7 @@ Transmittance = lpl.SpectralMeasurement("Measure the transmittance",
 ![The result is a preformatted plot of the reflectance corrected transmittance](https://github.com/Arghantyr/LSPR-glass-transmittance/blob/master/example.jpg)
 
 # License
-lspr_library is distributed under [MIT](https://choosealicense.com/licenses/mit/) license.
+lsprlib is distributed under [MIT](https://choosealicense.com/licenses/mit/) license.
 
 # Support
 If issue is spotted please open an issue on the [GitHub repo of the project](https://github.com/Arghantyr/LSPR-glass-transmittance/issues). For changes, upgrades and simillar refer to the [project's wiki site](https://github.com/Arghantyr/LSPR-glass-transmittance/wiki).
