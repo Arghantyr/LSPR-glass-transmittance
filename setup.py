@@ -12,11 +12,11 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="lspr_library",
+    name="lsprlib",
     version="0.20.6",
     author="Angantyr Krzysztof Orlinski",
     author_email="kakoori@gmail.com",
-    description="LSPR-library is a Python 3 scientific package for modelling UV-Vis spectral behaviour of metallic nanoparticle-dieletric composites.",
+    description="lsprlib is a Python 3 scientific package for modelling UV-Vis spectral behaviour of metallic nanoparticle-dieletric composites.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Arghantyr/LSPR-glass-transmittance",
