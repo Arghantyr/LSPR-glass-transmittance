@@ -1,9 +1,3 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy import optimize
-import scipy.constants as constants
-
 class Sellmeier:
 
     """
@@ -34,6 +28,12 @@ class Sellmeier:
             - Sellmeier constants for n: B_i, C_i (i=1...3) and for k: b_i (i=1...3)
             - Forouhi-Bloomer contants: n_inf, Eg, A, B, C
     """
+    
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy import optimize
+    import scipy.constants as constants
     
     # Get the important physical constants
     h = constants.physical_constants["Planck constant"][0]
