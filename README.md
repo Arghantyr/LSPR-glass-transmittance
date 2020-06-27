@@ -32,7 +32,9 @@ pip install lspr
 
 ## Anaconda
 
+```
 conda install -c angantyr lspr
+```
 
 # Usage
 
