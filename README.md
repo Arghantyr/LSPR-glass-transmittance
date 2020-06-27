@@ -24,11 +24,15 @@ To perform a simulation, one needs to construct a composite, so matrix and metal
 
 # How to get it running?
 
-To install lspr package use [pip](https://pip.pypa.io/en/stable/) package manager:
+## PyPI
 
 ```
 pip install lspr
 ```
+
+## Anaconda
+
+conda install -c angantyr lspr
 
 # Usage
 
