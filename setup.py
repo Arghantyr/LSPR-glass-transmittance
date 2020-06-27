@@ -13,7 +13,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="lsprlib",
-    version="0.20.6",
+    version="0.20.6.1",
     author="Angantyr Krzysztof Orlinski",
     author_email="kakoori@gmail.com",
     description="lsprlib is a Python 3 scientific package for modelling UV-Vis spectral behaviour of metallic nanoparticle-dieletric composites.",
