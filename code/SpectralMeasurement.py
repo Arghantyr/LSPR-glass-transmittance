@@ -1,14 +1,14 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy import integrate
-from scipy import stats
-
 class SpectralMeasurement:
     """
     Basic spectral measurements: absorbance, transmittance
     """
-
+    
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy import integrate
+    from scipy import stats
+    
     # Get the important physical constants
     pi = np.pi
 
