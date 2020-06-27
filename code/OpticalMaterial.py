@@ -1,6 +1,3 @@
-import pandas as pd
-import numpy as np
-
 class OpticalMaterial:
     """
     A class for any material to be considered for its optical properties.
@@ -21,6 +18,10 @@ class OpticalMaterial:
                 Source of the refractive index data. Expected a 3 column table: Wavelength, n, k.
 
         """
+        
+        import pandas as pd
+        import numpy as np
+        
         # Handle the name
         if type(name) == str:
             if name[-4:] == ".csv":
