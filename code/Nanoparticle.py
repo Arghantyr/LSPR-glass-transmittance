@@ -32,19 +32,8 @@ class Nanoparticle:
         self.concentration = concentration
 
     def modify(self, feature: str, new):
-
-        if feature == "material":
-            self.material = new
-        elif feature == "size":
-            self.size = new
-        elif feature == "concentration":
-            self.concentration = new
-        elif feature == "stdev":
-            self.stdev = new
-        elif feature == "name":
-            self.name = new
-        else:
-            raise AttributeError("Invalid attribute in Nanoparticle class.")
+        
+        setattr(self, feature, new)
 
     def __repr__(self):
         return "{} nanoparticles with size {}±{} nm and concentration {:.2e} cm^-3. Size distribution: Normal.".format(
