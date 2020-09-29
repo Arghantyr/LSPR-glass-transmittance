@@ -1,4 +1,4 @@
-class Sellmeier:
+class Fitting:
 
     """
     Class for fitting Sellmeier or Forouhi-Bloomer model to refractive index experimental data.
