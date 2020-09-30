@@ -92,7 +92,9 @@ class Fitting:
 
         if model == "Sellmeier":
             """
-            A 3rd order Sellmeier function.
+            A 3rd order Sellmeier function, i.e.:
+            
+            n**2 = 1 + sum(Bi * (lambda^2 / (lambda^2 - Ci) ) for i = 1..3
 
             Parameters:
                 x: int, float, list, numpy.ndarray, pandas.Series, pandas.DataFrame
