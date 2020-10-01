@@ -72,12 +72,7 @@ class Fitting:
         # Initiate an empty dict with tables of constants
 
         # Initiate Sellmeier constants table with 0's
-        terms = []
-
-        for j in range(1,4):
-            symb = ("B", "C", "b")
-            for k in symb:
-                terms.append(k+str(j))
+        terms = [k+str(j) for j in range(1,4) for k in ("B", "C", "b")]
 
         self.constants["Sellmeier"] = pd.Series([0 for _ in range(6)], name="Value").reindex(terms)
 
