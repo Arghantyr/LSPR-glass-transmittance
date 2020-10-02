@@ -171,7 +171,9 @@ class Fitting:
         else:
             raise Exception("Invalid model. Expected 'Sellmeier' or 'Forouhi-Bloomer'." )
 
-    def fit_data(self, model: str = "Sellmeier"):
+    def fit_data(self, model: str = "Sellmeier", bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
+                 p0 = [0.7, 0.07, 0.4, 0.1, 0.9, 10]):
+        
         """
         Fit source data according to the specified model.
 
@@ -181,6 +183,15 @@ class Fitting:
         model: str = "Sellmeier"
             Model to be used t=for fitting n, k source data. Accepts two values: "Sellmeier or "Forouhi-Bloomer".
             Defaults to 3rd order Sellmeier for n and k.
+            
+        bounds: tuple = (0, [2., 1., 10., 0.01, 0.1, 200.])
+            Set bounds for the Sellmeier parameters Bi, Ci. Default lower bound is 0, upper bounds form a list, for B1,C1,...
+        
+        p0: list = [0.7, 0.07, 0.4, 0.1, 0.9, 10]
+            Set the initial search parameters. Default parameters are near the values for the fused silica, i.e.:
+            B1 = 0.696, C1 = 0.0684, B2 = 0.408, C2 = 0.11624, B3 = 0.897, C3 = 9.896
+            
+            As reported by I. H. Malitson in "Interspecimen comparison of the refractive index of fused silica"; J. Opt. Soc. Am. 55, 1205-1208 (1965)
 
         Returns:
         -----------
@@ -228,10 +239,11 @@ class Fitting:
             The optimizing parameters are based on Sellmeier constants for existing glasses.
             p0 initializing values are set on the order of the constants for fused silica.
             """
+            
 
             popt_n, pcov_n = optimize.curve_fit(Sellmeier_n, dane_n.iloc[:,0], dane_n.iloc[:,1]**2,
-                                                bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
-                                                p0 = [0.5, 0.5, 0.7, 0.005, 0.01, 100])
+                                                bounds = bounds,
+                                                p0 = p0)
 
 
             # fill the fitted constants (popt) to the table of constants
