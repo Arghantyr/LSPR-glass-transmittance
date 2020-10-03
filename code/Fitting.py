@@ -171,7 +171,7 @@ class Fitting:
         else:
             raise Exception("Invalid model. Expected 'Sellmeier' or 'Forouhi-Bloomer'." )
 
-    def fit_data(self, model: str = "Sellmeier", bounds = (0, [2., 1., 10., 0.01, 0.1, 200.]),
+    def fit_data(self, model: str = "Sellmeier", bounds = None,
                  p0 = [0.7, 0.07, 0.4, 0.1, 0.9, 10]):
         
         """
@@ -184,8 +184,8 @@ class Fitting:
             Model to be used t=for fitting n, k source data. Accepts two values: "Sellmeier or "Forouhi-Bloomer".
             Defaults to 3rd order Sellmeier for n and k.
             
-        bounds: tuple = (0, [2., 1., 10., 0.01, 0.1, 200.])
-            Set bounds for the Sellmeier parameters Bi, Ci. Default lower bound is 0, upper bounds form a list, for B1,C1,...
+        bounds = None
+            Set bounds for the Sellmeier parameters Bi, Ci. Defaults to None.
         
         p0: list = [0.7, 0.07, 0.4, 0.1, 0.9, 10]
             Set the initial search parameters. Default parameters are near the values for the fused silica, i.e.:
