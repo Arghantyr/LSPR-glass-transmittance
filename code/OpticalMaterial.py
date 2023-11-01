@@ -49,13 +49,17 @@ class OpticalMaterial:
         self.n = p.drop(columns=['k'])
         self.k = p.drop(columns=['n'])
 
-        self.permittivity = pd.concat([p.iloc[:,0], p.iloc[:,1]**2 - p.iloc[:,2]**2, 2*p.iloc[:,1] * p.iloc[:,2]], axis=1, keys=[p.columns[0],
-                         "Real permittivity, a.u.", "Imaginary permittivity, a.u."])
+        self.permittivity = pd.concat([p.iloc[:,0],
+                                       p.iloc[:,1]**2 - p.iloc[:,2]**2,
+                                       2*p.iloc[:,1] * p.iloc[:,2]],
+                                      axis=1, keys=[p.columns[0],
+                         "Real permittivity, a.u.",
+                         "Imaginary permittivity, a.u."])
         self.real_permittivity = self.permittivity.drop(columns=["Imaginary permittivity, a.u."])
         self.imaginary_permittivity = self.permittivity.drop(columns=["Real permittivity, a.u."])
 
     def even_xspacing(self, optical_property, left_bound: float = None,
-                         right_bound: float = None, spacing: float = None):
+                      right_bound: float = None, spacing: float = None):
 
         """
         Takes optical_property, e.g. refractive_index and returns evenly spaced data with defined spacing.
@@ -66,10 +70,8 @@ class OpticalMaterial:
         p = optical_property
         ds = p.iloc[:,0]
         ds.name = p.columns[0]
-
-
+                          
         # Modify the bounds
-
         if left_bound == None:
             minds = min(ds)
         else:
@@ -88,9 +90,9 @@ class OpticalMaterial:
         # Warn if new spacing is smaller than old spacing
         len_spacing = len(str(spacing))
         if spacing < avg_spacing:
-            print("Warning: the specified value of spacing {} is smaller than the average".format(spacing),
-                  " value of the spacing from the dataset {}. Interpolation may cause errors,".format(avg_spacing),
-                 " depending on the difference between the new spacing and the average old spacing")
+            print(f"Warning: the specified value of spacing {spacing} is smaller than the average",
+                  f" value of the spacing from the dataset {avg_spacing}. Interpolation may cause errors,",
+                 f" depending on the difference between the new spacing and the average old spacing")
 
 
         # Preprocess the data
